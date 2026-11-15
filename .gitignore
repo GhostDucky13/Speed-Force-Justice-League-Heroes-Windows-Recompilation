@@ -1,0 +1,37 @@
+# --- game data: never commit (players supply their own dumps) ---
+*.iso
+*.xiso
+*.cso
+*.xbe
+!toolkit/tools/conformance/test.xbe
+res/
+Dumps/
+work/
+game_files/
+game/src/recomp/gen/
+toolkit/tools/*/output/
+*.gob
+*.tex
+*.vat
+*.lmp
+*.swb
+
+# --- build output ---
+build/
+build-*/
+payload/
+payload_src/
+dist/
+*.exe
+*.dll
+*.obj
+*.o
+*.pdb
+__pycache__/
+*.pyc
+
+# --- runtime / user data ---
+config/
+*.log
+*.bmp
+*.sfar

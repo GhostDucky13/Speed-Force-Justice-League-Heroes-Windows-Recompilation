@@ -1,0 +1,17 @@
+SPEED FORCE - LEGAL NOTICE
+
+Speed Force is an unofficial fan project. It is not affiliated with, endorsed or sponsored by
+Warner Bros. Games, DC, Snowblind Studios, Eidos or any of their affiliates. "Justice League
+Heroes" and all related names, characters and trademarks belong to their respective owners.
+
+This setup and the Speed Force source code contain NO code, graphics, sound, text or other data
+from Justice League Heroes. To use Speed Force you must supply your own dumps (disc images) of
+the Xbox and PSP versions of the game, made from discs you own. The setup reads them only on
+your computer to build your own copy. Do not share the game files or the built game.
+
+Speed Force's own code is provided under the MIT License, WITHOUT WARRANTY OF ANY KIND.
+Third-party components are provided under their own licenses (THIRD_PARTY_NOTICES.md). The
+NVIDIA DLSS, AMD FidelityFX and Intel XeSS runtime files are redistributed under their vendors'
+licenses.
+
+By continuing you confirm that you own the original discs your dumps were made from.

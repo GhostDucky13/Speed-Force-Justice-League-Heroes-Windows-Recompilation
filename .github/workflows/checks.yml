@@ -1,0 +1,22 @@
+name: checks
+# Repository checks. The installer itself is built locally (docs/BUILDING.md) because it bundles
+# the upscaler vendors' SDK runtimes; no game files are ever involved.
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Python sources compile
+        run: python -m compileall -q setup modtools game/seeds toolkit/tools
+      - name: No game data in the repository
+        shell: pwsh
+        run: |
+          $bad = git ls-files | Where-Object { $_ -ne 'toolkit/tools/conformance/test.xbe' } | Where-Object { $_ -match '\.(iso|xiso|xbe|gob|tex|vat|lmp|swb)$' -or $_ -match '^game/src/recomp/gen/' -or $_ -match '^toolkit/tools/[^/]+/output/' }
+          if ($bad) { $bad; throw "game-derived files are tracked" }
