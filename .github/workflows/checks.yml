@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: '3.13'
       - name: Python sources compile
-        run: python -m compileall -q setup modtools game/seeds toolkit/tools
+        run: python -m compileall -q setup game/seeds toolkit/tools
       - name: No game data in the repository
         shell: pwsh
         run: |

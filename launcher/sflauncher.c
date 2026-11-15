@@ -17,7 +17,7 @@
 #define SF_VERSION "2.0.0"
 #endif
 #ifndef SF_GITHUB_REPO
-#define SF_GITHUB_REPO "ghostDucky13/Speed-Force"
+#define SF_GITHUB_REPO "GhostDucky13/Speed-Force"
 #endif
 #define SF_WIDEN2(x) L##x
 #define SF_WIDEN(x) SF_WIDEN2(x)
