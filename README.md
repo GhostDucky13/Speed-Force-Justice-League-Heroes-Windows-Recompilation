@@ -88,8 +88,8 @@ free while building and about 5 GB afterwards. When it's done, the AppImage is t
 The game itself is the Windows `SpeedForce.exe`, so it runs through a compatibility layer. The
 launcher picks one for you (you can change it on the About page, under "Run the game with"):
 
-1. **Proton**, when Steam is installed (Proton Experimental, GE-Proton or the newest Proton it
-   finds). This is the best choice, and the one a Steam Deck uses.
+1. **Proton**, when Steam is installed (the newest numbered Proton or GE-Proton it finds;
+   Proton Experimental if that is the only one). This is the best choice, and the one a Steam Deck uses.
 2. **Wine** installed on your system.
 3. Otherwise, the **built-in Wine** in the AppImage (Wine 11 with DXVK and vkd3d-proton), so
    nothing else has to be installed.
