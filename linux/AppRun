@@ -1,0 +1,6 @@
+#!/bin/sh
+# Speed Force AppImage entry point: the bundled Python (with Tk) runs the builder / launcher.
+HERE="$(dirname "$(readlink -f "$0")")"
+export PYTHONNOUSERSITE=1
+unset PYTHONHOME PYTHONPATH
+exec "$HERE/usr/python/bin/python3" -s "$HERE/usr/share/speedforce/app/speedforce_linux.py" "$@"

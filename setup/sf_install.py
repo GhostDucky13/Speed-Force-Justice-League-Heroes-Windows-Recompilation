@@ -3,7 +3,11 @@
 sf_install.py - what the Speed Force setup runs after copying its files.
 
   python sf_install.py --xbox <Xbox dump .iso> --psp <PSP dump .iso> --app <install dir>
-                       [--allow-unknown-dumps] [--keep-build]
+                       [--saves <folder>] [--tools <dir>] [--allow-unknown-dumps] [--keep-build]
+
+On Windows the setup puts everything in <install dir>\\_build. On Linux (the AppImage) the
+compilers stay in the AppImage (--tools: llvm/, cmake/, ninja/) and the same Windows
+SpeedForce.exe is cross-compiled with LLVM-MinGW.
 
 Everything happens on the player's own PC, from the player's own dumps:
   1. check the dumps        5. translate the patched Xbox program to C (xboxrecomp)
@@ -114,7 +118,8 @@ def main():
     ap.add_argument('--app', required=True)
     ap.add_argument('--allow-unknown-dumps', action='store_true')
     ap.add_argument('--keep-build', action='store_true')
-    ap.add_argument('--saves', help='a folder (or file) of Xbox / PSP saves to bring over')
+    ap.add_argument('--saves', help='a folder (or file) of Xbox saves to bring over')
+    ap.add_argument('--tools', help='where llvm/, cmake/ and ninja/ are (default: next to setup/)')
     a = ap.parse_args()
     app = os.path.abspath(a.app)
     os.makedirs(app, exist_ok=True)
@@ -193,13 +198,21 @@ def install(a, app):
          '--gen-dir', gen], cwd=tk)
 
     step(6, 'Compiling (about 5-15 minutes, depending on the CPU)')
+    tools = os.path.abspath(a.tools) if a.tools else BUILD
     env = dict(os.environ)
-    env['PATH'] = os.pathsep.join([os.path.join(BUILD, 'llvm', 'bin'), os.path.join(BUILD, 'cmake', 'bin'),
-                                   os.path.join(BUILD, 'ninja'), env.get('PATH', '')])
+    env['PATH'] = os.pathsep.join([os.path.join(tools, 'llvm', 'bin'), os.path.join(tools, 'cmake', 'bin'),
+                                   os.path.join(tools, 'ninja'), env.get('PATH', '')])
     bdir = os.path.join(work, 'build')
     deps = os.path.join(BUILD, 'deps')
-    run(['cmake', '-S', game, '-B', bdir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release',
-         '-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DCMAKE_RC_COMPILER=windres',
+    if os.name == 'nt':
+        compilers = ['-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DCMAKE_RC_COMPILER=windres']
+    else:   # cross-compile the same Windows program
+        t = 'x86_64-w64-mingw32-'
+        compilers = ['-DCMAKE_SYSTEM_NAME=Windows', '-DCMAKE_SYSTEM_PROCESSOR=AMD64',
+                     '-DCMAKE_C_COMPILER=' + t + 'clang', '-DCMAKE_CXX_COMPILER=' + t + 'clang++',
+                     '-DCMAKE_RC_COMPILER=' + t + 'windres', '-DCMAKE_AR=' + os.path.join(tools, 'llvm', 'bin', 'llvm-ar'),
+                     '-DCMAKE_RANLIB=' + os.path.join(tools, 'llvm', 'bin', 'llvm-ranlib')]
+    run(['cmake', '-S', game, '-B', bdir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release'] + compilers + [
          '-DXBOXRECOMP_DIR=' + tk, '-DXBOXRECOMP_ENHANCE=ON', '-DXBOX_INPUT_SDL_WIN=ON',
          '-DSDL3_DIR=' + os.path.join(deps, 'SDL3', 'cmake'),
          '-DXBOXRECOMP_DSP56300_ARCHIVE=' + os.path.join(deps, 'dsp56300.tar.gz'),
@@ -233,7 +246,7 @@ def install(a, app):
         # the build tools and sources are no longer needed (the running Python stays until
         # the uninstaller removes it)
         shutil.rmtree(work, ignore_errors=True)
-        for d in ('llvm', 'cmake', 'ninja', 'toolkit', 'game', 'deps', 'jlh-upscale', 'runtime'):
+        for d in (('llvm', 'cmake', 'ninja') if not a.tools else ()) + ('toolkit', 'game', 'deps', 'jlh-upscale', 'runtime'):
             shutil.rmtree(os.path.join(BUILD, d), ignore_errors=True)
 
 

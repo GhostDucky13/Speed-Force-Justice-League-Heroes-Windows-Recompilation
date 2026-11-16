@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0 Linux
+- New **Linux AppImage** (`SpeedForce-2.0.0-x86_64.AppImage`): the same builder and launcher for
+  Linux and Steam Deck. It builds the same game on your PC and runs it with Proton, your system
+  Wine, or the Wine it carries (with DXVK and vkd3d-proton), in that order.
+- Fixed: the game crashed at start on a PC with no sound output device (seen under Wine); it now
+  runs without sound instead.
+- The build steps (`setup/sf_install.py`) also run on Linux, cross-compiling with LLVM-MinGW.
+
 ## 2.0.0
 - New **Speed Force Builder**: one program that checks your dumps and free space on the spot,
   then builds and installs the game with every step, its time and the time left on screen.

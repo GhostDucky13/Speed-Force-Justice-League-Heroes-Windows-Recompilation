@@ -30,7 +30,7 @@ more. See [FEATURES.md](FEATURES.md) for a detailed explanation of everything.
 
 ## What you need
 
-- Windows 10 or 11, 64-bit
+- Windows 10 or 11, 64-bit, or Linux / Steam Deck ([see below](#linux-and-steam-deck))
 - A DirectX 11 graphics card (DLSS needs an NVIDIA RTX card; FSR and XeSS run on any modern GPU)
 - About 14 GB free disk space while the game is built (12 GB, plus 2 GB to be safe); about 5 GB afterwards
 - Your own dumps (disc images) of:
@@ -76,6 +76,31 @@ Supported dumps (SHA-1 of the whole image):
 
 Other dumps are refused by default, because the mod tools patch exact byte offsets.
 
+## Linux and Steam Deck
+
+Download `SpeedForce-2.0.0-x86_64.AppImage` from [Releases](../../releases), make it executable
+(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.0.0-x86_64.AppImage`) and
+open it. The same builder opens, with the same steps: choose the install folder (by default
+`~/Games/Speed Force`) and your two dumps, and it builds the game on your PC. It needs about 9 GB
+free while building and about 5 GB afterwards. When it's done, the AppImage is the launcher
+(Play, settings, saves, update check, uninstall); it also adds **Speed Force** to your app menu.
+
+The game itself is the Windows `SpeedForce.exe`, so it runs through a compatibility layer. The
+launcher picks one for you (you can change it on the About page, under "Run the game with"):
+
+1. **Proton**, when Steam is installed (Proton Experimental, GE-Proton or the newest Proton it
+   finds). This is the best choice, and the one a Steam Deck uses.
+2. **Wine** installed on your system.
+3. Otherwise, the **built-in Wine** in the AppImage (Wine 11 with DXVK and vkd3d-proton), so
+   nothing else has to be installed.
+
+Notes:
+- Your graphics driver needs Vulkan (any GPU from the last 10 years with Mesa or the NVIDIA
+  driver). Without Vulkan, start the AppImage with `SPEEDFORCE_WINED3D=1` (Wine only, not Proton)
+  to use Wine's OpenGL renderer instead; it is slower and frame generation may not be available.
+- DLSS needs Proton with an NVIDIA RTX card; FSR and XeSS work everywhere.
+- The game's log for the Linux side is `SpeedForce-linux.log` in the install folder.
+
 ## Controls
 
 Xbox, PlayStation (DualSense / DualShock), Nintendo (Switch Pro, Joy-Con, GameCube adapters)
@@ -100,6 +125,7 @@ launcher are plain Win32 C with a small shared UI (`launcher/sfui.h`).
 | `setup/modtools/` | The mod's tools: XBE patcher, menu and data editors, PSP to Xbox character and level converters |
 | `setup/` | Disc extractor, mod builder, save importer and the build steps the builder runs |
 | `launcher/` | The Speed Force Builder (the setup) and launcher, their UI and the build-kit packer |
+| `linux/` | The Linux AppImage: builder and launcher (Python / Tk), AppDir packer, fonts |
 | `assets/` | Button icon pack (generated, original artwork) |
 | `docs/` | Dumping, building, and the mod's technical notes |
 

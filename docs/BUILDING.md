@@ -20,6 +20,27 @@ and the entry in Windows' installed apps. Scripted: `SpeedForce-Setup-2.0.0.exe 
 [/dir <folder>] [/saves <folder>]` fills the fields in. `setup\sf_saves.py --in <folder> --out
 <install dir>\saves` imports Xbox saves on its own.
 
+## The Linux AppImage
+Requirements: Linux x86_64 with FUSE (or use `--appimage-extract-and-run`), and the Windows build
+kit's inputs (the same `jlh_upscale.dll`, SDL3, dsp56300 and librashader downloads as above).
+
+    (download into linux_kit/: cpython-3.13.*-x86_64-unknown-linux-gnu-install_only.tar.gz
+     (python-build-standalone), wheels/ (pip download --only-binary=:all: --platform
+     manylinux_2_28_x86_64 --python-version 3.13 numpy pillow capstone),
+     llvm-mingw-*-ucrt-ubuntu-*-x86_64.tar.xz, cmake-*-linux-x86_64.tar.gz, ninja-linux.zip,
+     wine-*-amd64-wow64.tar.xz (Kron4ek), dxvk-*.tar.gz, vkd3d-proton-*.tar.gz)
+    python3 linux/make_appdir.py --kit linux_kit --deps payload_src --out AppDir
+    appimagetool --comp zstd AppDir dist/SpeedForce-2.0.0-x86_64.AppImage
+
+The AppImage's builder copies the
+kit into `<install>/_build` and runs `sf_install.py --tools <AppImage>/usr/share/speedforce/tools`;
+on Linux `sf_install.py` cross-compiles with `x86_64-w64-mingw32-clang` (`CMAKE_SYSTEM_NAME=Windows`),
+so the result is the same `SpeedForce.exe` as on Windows. The launcher then runs it with Proton
+(`proton run`, prefix in `~/.local/share/speedforce/proton`), a system Wine, or the bundled Wine
+(prefix in `~/.local/share/speedforce/wine`, DXVK/vkd3d DLLs copied into it). Scripted:
+`SpeedForce-2.0.0-x86_64.AppImage --setup --xbox <iso> --psp <iso> [--dir <folder>] [--saves <folder>]`;
+`--play` starts the game directly.
+
 ## Without the setup (developers)
 With your own dumps:
 

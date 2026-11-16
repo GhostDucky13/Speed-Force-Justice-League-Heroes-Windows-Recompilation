@@ -22,4 +22,21 @@ the linked projects (and, for the toolkit's dependencies, in `toolkit/LICENSES` 
 | [DejaVu fonts](https://dejavu-fonts.github.io) | Letters in the generated button icons | Bitstream Vera / DejaVu license |
 | [Inter](https://rsms.me/inter/) | Lettering in the launcher artwork (launcher/make_art.py) | SIL Open Font License 1.1 |
 
+The Linux AppImage also carries:
+
+| Component | Use | License |
+|---|---|---|
+| [Wine](https://www.winehq.org) (Kron4ek build) | Runs the game when neither Proton nor a system Wine is found | LGPL-2.1-or-later |
+| [DXVK](https://github.com/doitsujin/dxvk) | Direct3D 9-11 on Vulkan for the built-in Wine | zlib |
+| [vkd3d-proton](https://github.com/HansKristian-Work/vkd3d-proton) | Direct3D 12 on Vulkan (FSR / XeSS paths) | LGPL-2.1 |
+| [python-build-standalone](https://github.com/astral-sh/python-build-standalone) | Python with Tk for the builder and launcher | PSF License; Tcl/Tk: BSD-style |
+| [LLVM-MinGW](https://github.com/mstorsjo/llvm-mingw) (Linux host build) | Cross-compiles the game | Apache-2.0 with LLVM exception and others |
+| [CMake](https://cmake.org), [Ninja](https://ninja-build.org) (Linux builds) | Build tools | BSD-3-Clause, Apache-2.0 |
+| [Inter](https://rsms.me/inter/) | Launcher lettering (`linux/fonts`) | SIL Open Font License 1.1 |
+| [DejaVu Sans Mono](https://dejavu-fonts.github.io) | Details log lettering (`linux/fonts`) | Bitstream Vera / DejaVu license |
+| [AppImage runtime](https://github.com/AppImage/type2-runtime) | Makes the AppImage start | MIT |
+
+Wine and vkd3d-proton are LGPL: their unmodified sources are at the links above (Wine 11.22,
+vkd3d-proton 3.1, DXVK 3.1.1).
+
 All trademarks belong to their owners.

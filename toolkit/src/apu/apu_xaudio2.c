@@ -21,6 +21,7 @@
 #define COBJMACROS
 #include <windows.h>
 #include <xaudio2.h>
+#include <mmdeviceapi.h>
 
 #pragma comment(lib, "xaudio2.lib")
 #pragma comment(lib, "ole32.lib")
@@ -82,6 +83,27 @@ static ULONGLONG g_xa2_underrun_logged;
 static int                     g_xa2_initialized = 0;
 static int                     g_xa2_frames_written = 0;
 
+/* Is there an audio output at all? Wine's XAudio2 (FAudio) crashes in
+ * CreateMasteringVoice when the host has no sound device, so the game asks
+ * Windows' (or Wine's) device list first and, without an output, runs
+ * silently instead. The GUIDs are spelled out to need no extra library. */
+static int xa2_have_output_device(void)
+{
+    static const GUID clsid = {0xBCDE0395, 0xE52F, 0x467C, {0x8E, 0x3D, 0xC4, 0x57, 0x92, 0x91, 0x69, 0x2E}};
+    static const GUID iid = {0xA95664D2, 0x9614, 0x4F35, {0xA7, 0x46, 0xDE, 0x8D, 0xB6, 0x36, 0x17, 0xE6}};
+    IMMDeviceEnumerator *en = NULL;
+    IMMDevice *dev = NULL;
+    int ok = 0;
+    if (FAILED(CoCreateInstance(&clsid, NULL, CLSCTX_ALL, &iid, (void **)&en)) || !en)
+        return 1;           /* can't tell: try XAudio2 as before */
+    if (SUCCEEDED(en->lpVtbl->GetDefaultAudioEndpoint(en, eRender, eConsole, &dev)) && dev) {
+        ok = 1;
+        dev->lpVtbl->Release(dev);
+    }
+    en->lpVtbl->Release(en);
+    return ok;
+}
+
 int xa2_init(void)
 {
     HRESULT hr;
@@ -107,6 +129,11 @@ int xa2_init(void)
         return 0;
     }
     com_initialized = SUCCEEDED(hr);
+
+    if (!xa2_have_output_device()) {
+        fprintf(stderr, "[XA2] no audio output device: the game runs without sound\n");
+        goto fail;
+    }
 
     hr = XAudio2Create(&g_xa2, 0, XAUDIO2_DEFAULT_PROCESSOR);
     if (FAILED(hr) || !g_xa2) {

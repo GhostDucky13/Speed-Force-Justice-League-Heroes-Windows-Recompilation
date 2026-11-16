@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Speed Force
+Comment=Justice League Heroes, native recompilation: builder and launcher
+Exec=AppRun %F
+Icon=speedforce
+Terminal=false
+Categories=Game;
+StartupWMClass=speedforce
+X-AppImage-Version=2.0.0
