@@ -23,3 +23,20 @@ Xbox saves are signed with a key that belongs to the console. The importer signs
 the PC version; the save data itself is not changed otherwise.
 
 Only Xbox saves are supported.
+
+## Backups
+
+Every time the game is about to overwrite or delete a save file, Speed Force first copies the
+file as it was into the `backup` folder inside `saves`, with the same folders below it and a
+number that goes up by one each time:
+
+```
+saves\UDATA\57520001\<save>\slot.bin                       the save
+saves\backup\UDATA\57520001\<save>\slot.bin.0001.bak       the save before the 1st overwrite
+saves\backup\UDATA\57520001\<save>\slot.bin.0002.bak       ... before the 2nd
+```
+
+Saves are small, so all of them are kept (a thousand backups are still only a few MB). To get
+an older save back, close the game, copy the `.bak` file you want over the save file and remove
+the `.<number>.bak` ending from its name. Delete the `backup` folder whenever you like; it is
+only for you. (Developers: `RECOMP_SAVE_BACKUP=0` turns it off.)

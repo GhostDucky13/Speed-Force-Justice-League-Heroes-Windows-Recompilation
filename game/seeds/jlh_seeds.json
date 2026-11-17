@@ -50,5 +50,9 @@
  {
   "start": "0x00010F1B",
   "note": "seed"
+ },
+ {
+  "start": "0x00010F32",
+  "note": "seed"
  }
 ]

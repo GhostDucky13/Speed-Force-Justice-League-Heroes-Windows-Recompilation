@@ -28,7 +28,7 @@ more. See [FEATURES.md](FEATURES.md) for a detailed explanation of everything.
 
 > **Two versions are available on [Releases](../../releases):**
 > - **2.1.x (stable, "Latest")**: everything below except online play.
-> - **3.0.1 (pre-release)**: adds **online play** ([guide](docs/ONLINE.md)). It works in our
+> - **3.0.2 (pre-release)**: adds **online play** ([guide](docs/ONLINE.md)). It works in our
 >   tests, but hasn't been tried by many players yet: please report how it goes. Both versions
 >   use the same saves and settings, so you can switch between them.
 
@@ -49,7 +49,7 @@ How to make the dumps from discs you own: [docs/DUMPING.md](docs/DUMPING.md).
 ## Installing
 
 1. Download `SpeedForce-Setup-<version>.exe` from [Releases](../../releases) (the stable 2.1.x,
-   or the 3.0.1 pre-release for online play) and run it. It's one
+   or the 3.0.2 pre-release for online play) and run it. It's one
    program, the **Speed Force Builder**: no administrator rights are needed.
 2. **Game files:** choose where to install (by default `%LOCALAPPDATA%\Programs\Speed Force`) and
    your Xbox and PSP disc images. Each one is checked on the spot, and so is the free space.
@@ -73,7 +73,7 @@ you can keep your saves and settings.
 
 The launcher checks this repository's [Releases](../../releases) when it opens and offers a
 newer version when there is one (it only asks GitHub for the list of releases; nothing about
-you or your PC is sent). The 2.x versions offer stable releases only; the 3.0.1 pre-release
+you or your PC is sent). The 2.x versions offer stable releases only; the 3.0.2 pre-release
 also offers newer pre-releases.
 
 Supported dumps (SHA-1 of the whole image):
@@ -88,7 +88,7 @@ Other dumps are refused by default, because the mod tools patch exact byte offse
 ## Linux and Steam Deck
 
 Download `SpeedForce-<version>-x86_64.AppImage` from [Releases](../../releases) (the stable 2.1.x,
-or the 3.0.1 pre-release for online play), make it executable (right-click > Properties > Allow
+or the 3.0.2 pre-release for online play), make it executable (right-click > Properties > Allow
 executing, or `chmod +x SpeedForce-<version>-x86_64.AppImage`) and
 open it. The same builder opens, with the same steps: choose the install folder (by default
 `~/Games/Speed Force`) and your two dumps, and it builds the game on your PC. It needs about 9 GB
@@ -119,7 +119,7 @@ Notes:
 
 ## Playing online
 
-*In the 3.0.1 pre-release.*
+*In the 3.0.2 pre-release.*
 
 Two players on two computers, through the launcher's **Online** page: one player hosts, the
 other joins with the address the host's window shows. Both computers run the whole game and swap
@@ -177,7 +177,7 @@ launcher are plain Win32 C with a small shared UI (`launcher/sfui.h`).
 
 ## Known issues
 
-- Online play (3.0.1 pre-release): the deterministic mode it needs is slower than normal play,
+- Online play (3.0.2 pre-release): the deterministic mode it needs is slower than normal play,
   so weaker PCs may run below 60 fps online. Tested with two copies on one Windows PC and on
   Linux, and Windows against Linux with the same inputs; not yet between two players over the
   internet. Reports are welcome.

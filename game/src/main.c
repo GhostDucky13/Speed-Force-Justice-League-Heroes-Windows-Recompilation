@@ -1200,7 +1200,7 @@ static void jlh_installed_defaults(void)
  * So before the kernel starts: turn that mode on, connect, check that the
  * other side has the same Speed Force version and game files, and give the
  * joiner the host's saves and language. */
-#define JLH_NETPLAY_VERSION "Speed Force 3.0.1 netplay 1"
+#define JLH_NETPLAY_VERSION "Speed Force 3.0.2 netplay 1"
 
 static uint64_t fnv(uint64_t h, const void *p, size_t n)
 {
@@ -1296,6 +1296,8 @@ static void pack_dir(const char *root, const char *rel, char **buf, size_t *len,
         if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, ".."))
             continue;
         snprintf(sub, sizeof sub, "%s%s%s", rel, rel[0] ? "\\" : "", fd.cFileName);
+        if (!rel[0] && !_stricmp(fd.cFileName, "backup"))
+            continue;       /* the host's save backups stay on the host */
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
             pack_dir(root, sub, buf, len, cap);
         } else {

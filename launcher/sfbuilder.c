@@ -19,7 +19,7 @@
 #include <uxtheme.h>
 #include <stdint.h>
 
-#define SF_VERSION_W L"3.0.1"
+#define SF_VERSION_W L"3.0.2"
 #define NEED_GB 14
 #define WM_APP_LINE (WM_APP + 1)
 #define WM_APP_DONE (WM_APP + 2)
@@ -432,6 +432,7 @@ static DWORD WINAPI build_thread(void *arg)
     swprintf(py, MAX_PATH, L"%ls\\_build\\python\\python.exe", g.app);
     swprintf(cmd, 4096, L"\"%ls\" -u \"%ls\\_build\\setup\\sf_install.py\" --xbox \"%ls\" --psp \"%ls\" --app \"%ls\"%ls%ls%ls",
              py, g.app, xbox, psp, g.app, saves[0] ? L" --saves \"" : L"", saves, saves[0] ? L"\"" : L"");
+    SetEnvironmentVariableW(L"SF_VERSION", SF_VERSION_W);   /* named at the top of install.log */
     CreatePipe(&rd, &wr, &sa, 0);
     SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0);
     memset(&si, 0, sizeof si);

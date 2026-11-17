@@ -1,5 +1,23 @@
 # Changelog
 
+## 3.0.2 (pre-release)
+- Fixed: missing visual effects (reported on GitHub and Reddit), such as Superman's freeze
+  breath, where only the sound played. Particle effects drawn as point sprites (breath, sparks,
+  smoke, energy blasts) lost their texture coordinates after the first frame that set them up,
+  because a speed-up in the graphics command decoder remembered the point-sprite switch as "not
+  handled here" and skipped every later change to it. Each particle then drew as one see-through
+  texel. The switch is now always applied.
+- Setup: install.log now starts with the Speed Force version and the system it runs on, and an
+  error is logged with its full details and, for a missing file, the file's name. (GitHub issue
+  #1 came from the 2.0.0 setup, whose build tool bug was fixed in 2.0.1; this makes reports like
+  it easier to diagnose.)
+- From 2.1.1: Challenge Missions never save and never show the "pick a slot" screen (they used
+  to overwrite the story save), and save backups: before the game overwrites or deletes a save
+  file, the old file is copied to `saves\backup\` as `<file>.0001.bak`, `.0002.bak`, ... (see
+  docs/SAVES.md). Online play leaves the backup folder out of the saves it sends.
+- Rebuild to get the fixes: run the 3.0.2 setup (Windows) or the 3.0.2 AppImage (Linux) over your
+  install; your saves and settings are kept. Both players need 3.0.2 to play online together.
+
 ## 3.0.1 (pre-release)
 - Fixed: no voices in cutscenes and in-game dialogue. The game speaks its dialogue on the center
   speaker, and only the front left and right speakers reached the output. All six speaker feeds

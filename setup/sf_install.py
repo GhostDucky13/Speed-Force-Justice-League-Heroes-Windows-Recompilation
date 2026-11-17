@@ -17,6 +17,7 @@ Everything happens on the player's own PC, from the player's own dumps:
 The setup carries no game code or data.
 """
 import argparse
+import platform
 import hashlib
 import os
 import shutil
@@ -132,10 +133,18 @@ def main():
     os.makedirs(app, exist_ok=True)
     LOG = open(os.path.join(app, 'install.log'), 'w', encoding='utf-8')
     t0 = time.time()
+    say(f"Speed Force {os.environ.get('SF_VERSION', '(unknown version)')} setup on {platform.platform()}, "
+        f"Python {sys.version.split()[0]}")
     try:
         install(a, app)
     except Exception as e:
-        say('ERROR: ' + str(e))
+        import traceback
+        LOG.write(traceback.format_exc())
+        LOG.flush()
+        if isinstance(e, OSError) and getattr(e, 'filename', None):
+            say(f'ERROR: {e.strerror or e}: {e.filename}')
+        else:
+            say('ERROR: ' + str(e))
         say('The full log is in ' + os.path.join(app, 'install.log'))
         return 1
     say(f'Done in {int(time.time() - t0) // 60} min.')

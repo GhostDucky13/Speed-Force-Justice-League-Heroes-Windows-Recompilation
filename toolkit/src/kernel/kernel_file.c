@@ -312,6 +312,198 @@ static BOOL translate_obj_path(PXBOX_OBJECT_ATTRIBUTES ObjectAttributes,
     return xbox_translate_path(xbox_path, win_path, buf_size);
 }
 
+/* ---- save backups ----
+ *
+ * Before a title overwrites or deletes one of its save files (a file inside a
+ * save's folder, UDATA\<title>\<save>\...), the file as it was is copied to <user-data root>\backup\<path below the root>.<n>.bak,
+ * n counting up from 1 for each file (0001, 0002, ...). The user-data root is
+ * where UDATA lives (the install's saves folder), so a save at
+ *   saves\UDATA\4d530064\<save>\savedata.dat
+ * is backed up as
+ *   saves\backup\UDATA\4d530064\<save>\savedata.dat.0001.bak
+ * Save files are small, so every overwrite is kept: a player who loses a save
+ * (overwritten by another mode, or by mistake) gets any earlier one back by
+ * copying it into place and removing ".<n>.bak".
+ *
+ * A save is written as several opens of the same file in quick succession;
+ * one copy per file per BACKUP_QUIET_MS is enough, and the later opens would
+ * otherwise copy a half-written save. RECOMP_SAVE_BACKUP=0 turns it off. */
+#define BACKUP_QUIET_MS 10000
+#define BACKUP_RECENT   32
+static struct { unsigned long long hash; ULONGLONG tick; } s_backup_recent[BACKUP_RECENT];
+static SRWLOCK s_backup_lock = SRWLOCK_INIT;
+
+static int save_backup_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("RECOMP_SAVE_BACKUP");
+        on = !(e && e[0] == '0');
+    }
+    return on;
+}
+
+static unsigned long long backup_hash(const WCHAR *p)
+{
+    unsigned long long h = 1469598103934665603ull;
+    for (; *p; p++) {
+        WCHAR c = (*p >= L'A' && *p <= L'Z') ? (WCHAR)(*p + 32) : *p;
+        h = (h ^ (unsigned long long)c) * 1099511628211ull;
+    }
+    return h;
+}
+
+/* 1 when the same file was copied less than BACKUP_QUIET_MS ago; else stamps it. */
+static int backup_recent(const WCHAR *path)
+{
+    unsigned long long h = backup_hash(path);
+    ULONGLONG now = GetTickCount64();
+    int i, oldest = 0, hit = 0;
+    AcquireSRWLockExclusive(&s_backup_lock);
+    for (i = 0; i < BACKUP_RECENT; i++) {
+        if (s_backup_recent[i].hash == h && now - s_backup_recent[i].tick < BACKUP_QUIET_MS) {
+            hit = 1;
+            break;
+        }
+        if (s_backup_recent[i].tick < s_backup_recent[oldest].tick)
+            oldest = i;
+    }
+    if (!hit) {
+        s_backup_recent[oldest].hash = h;
+        s_backup_recent[oldest].tick = now;
+    }
+    ReleaseSRWLockExclusive(&s_backup_lock);
+    return hit;
+}
+
+static void backup_mkdirs(WCHAR *dir)
+{
+    WCHAR *p;
+    for (p = dir + 3; *p; p++) {
+        if (*p == L'\\' || *p == L'/') {
+            WCHAR c = *p;
+            *p = 0;
+            CreateDirectoryW(dir, NULL);
+            *p = c;
+        }
+    }
+    CreateDirectoryW(dir, NULL);
+}
+
+/* Copy the save file at path (if it exists, is a file and is not empty). */
+static void save_backup_path(const WCHAR *path)
+{
+    char root8[MAX_PATH];
+    WCHAR root[MAX_PATH], dir[MAX_PATH], pattern[MAX_PATH], dst[MAX_PATH];
+    const WCHAR *rel, *name;
+    WIN32_FILE_ATTRIBUTE_DATA fad;
+    WIN32_FIND_DATAW fd;
+    HANDLE f;
+    size_t rl, nl;
+    unsigned n = 0;
+
+    if (!path || !save_backup_on())
+        return;
+    if (!GetFileAttributesExW(path, GetFileExInfoStandard, &fad)
+            || (fad.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            || !(fad.nFileSizeHigh || fad.nFileSizeLow))
+        return;
+    /* The user-data root: the UDATA folder's parent. */
+    if (!xbox_path_save_root(0, root8, sizeof root8)
+            || !MultiByteToWideChar(CP_UTF8, 0, root8, -1, root, MAX_PATH))
+        return;
+    for (WCHAR *q = root; *q; q++)
+        if (*q == L'/') *q = L'\\';
+    {
+        WCHAR *cut = wcsrchr(root, L'\\');
+        if (!cut) return;
+        *cut = 0;
+    }
+    rl = wcslen(root);
+    if (_wcsnicmp(path, root, rl) != 0 || (path[rl] != L'\\' && path[rl] != L'/'))
+        return;
+    rel = path + rl + 1;
+    if (_wcsnicmp(rel, L"backup\\", 7) == 0)
+        return;
+    {   /* only files inside a save's own folder (UDATA\<title>\<save>\file): the
+         * title-level TitleMeta.xbx / images are rewritten unchanged at every start */
+        int depth = 0;
+        for (const WCHAR *q = rel; *q; q++)
+            if (*q == L'\\' || *q == L'/') depth++;
+        if (depth < 3)
+            return;
+    }
+    if (backup_recent(path))
+        return;
+    name = wcsrchr(rel, L'\\');
+    {
+        const WCHAR *fwd = wcsrchr(rel, L'/');
+        if (fwd && (!name || fwd > name)) name = fwd;
+    }
+    name = name ? name + 1 : rel;
+    if (_snwprintf_s(dir, MAX_PATH, _TRUNCATE, L"%s\\backup\\%.*s", root,
+                     (int)(name - rel), rel) < 0)
+        return;
+    nl = wcslen(dir);
+    if (nl && (dir[nl - 1] == L'\\' || dir[nl - 1] == L'/'))
+        dir[nl - 1] = 0;
+    backup_mkdirs(dir);
+    /* The next number: one more than the highest already there. */
+    if (_snwprintf_s(pattern, MAX_PATH, _TRUNCATE, L"%s\\%s.*.bak", dir, name) < 0)
+        return;
+    f = FindFirstFileW(pattern, &fd);
+    if (f != INVALID_HANDLE_VALUE) {
+        size_t base = wcslen(name) + 1;
+        do {
+            if (wcslen(fd.cFileName) > base) {
+                unsigned v = (unsigned)wcstoul(fd.cFileName + base, NULL, 10);
+                if (v > n) n = v;
+            }
+        } while (FindNextFileW(f, &fd));
+        FindClose(f);
+    }
+    if (_snwprintf_s(dst, MAX_PATH, _TRUNCATE, L"%s\\%s.%04u.bak", dir, name, n + 1) < 0)
+        return;
+    if (CopyFileW(path, dst, TRUE))
+        xbox_log(XBOX_LOG_INFO, XBOX_LOG_FILE, "save backup: %S", dst);
+    else
+        xbox_log(XBOX_LOG_WARN, XBOX_LOG_FILE, "save backup of %S failed: err=%u",
+                 path, GetLastError());
+}
+
+/* An open that may change an existing save file. */
+static void save_backup_open(PXBOX_OBJECT_ATTRIBUTES oa, ACCESS_MASK access,
+                             ULONG disposition, ULONG options)
+{
+    WCHAR win_path[MAX_PATH];
+    if (!oa || (options & XBOX_FILE_DIRECTORY_FILE) || !save_backup_on())
+        return;
+    if (!disposition_overwrites(disposition)
+            && !(xbox_access_to_win32(access) & (GENERIC_WRITE | GENERIC_ALL | FILE_WRITE_DATA)))
+        return;
+    if (translate_obj_path(oa, win_path, MAX_PATH))
+        save_backup_path(win_path);
+}
+
+static void save_backup_delete_name(PXBOX_OBJECT_ATTRIBUTES oa)
+{
+    WCHAR win_path[MAX_PATH];
+    if (oa && save_backup_on() && translate_obj_path(oa, win_path, MAX_PATH))
+        save_backup_path(win_path);
+}
+
+static void save_backup_handle(HANDLE h)
+{
+    WCHAR p[MAX_PATH + 8];
+    DWORD n;
+    if (!h || !save_backup_on())
+        return;
+    n = GetFinalPathNameByHandleW(h, p, MAX_PATH + 8, FILE_NAME_NORMALIZED | VOLUME_NAME_DOS);
+    if (!n || n >= MAX_PATH + 8)
+        return;
+    save_backup_path(wcsncmp(p, L"\\\\?\\", 4) == 0 ? p + 4 : p);
+}
+
 static NTSTATUS host_NtCreateFile(
     PHANDLE FileHandle, ACCESS_MASK DesiredAccess,
     PXBOX_OBJECT_ATTRIBUTES ObjectAttributes, PXBOX_IO_STATUS_BLOCK IoStatusBlock,
@@ -1234,6 +1426,16 @@ static int posix_obj_path(PXBOX_OBJECT_ATTRIBUTES oa, char* host_path, size_t n)
     return xbox_translate_path(xbox_path, host_path, (DWORD)n) ? 1 : 0;
 }
 
+/* Save backups (see the Windows version): the game is a Windows program, so
+ * only that side keeps them. */
+static void save_backup_open(PXBOX_OBJECT_ATTRIBUTES oa, ACCESS_MASK access,
+                             ULONG disposition, ULONG options)
+{
+    (void)oa; (void)access; (void)disposition; (void)options;
+}
+static void save_backup_delete_name(PXBOX_OBJECT_ATTRIBUTES oa) { (void)oa; }
+static void save_backup_handle(HANDLE h) { (void)h; }
+
 static NTSTATUS host_NtCreateFile(
     PHANDLE FileHandle, ACCESS_MASK DesiredAccess,
     PXBOX_OBJECT_ATTRIBUTES ObjectAttributes, PXBOX_IO_STATUS_BLOCK IoStatusBlock,
@@ -2089,6 +2291,8 @@ NTSTATUS __stdcall xbox_NtCreateFile(
     RAMFS_FIRST(xbox_ramfs_create(FileHandle, DesiredAccess, ObjectAttributes,
                                   IoStatusBlock, CreateDisposition, CreateOptions,
                                   &ramfs_st));
+    if (ObjectAttributes && saves_name(ObjectAttributes))
+        save_backup_open(ObjectAttributes, DesiredAccess, CreateDisposition, CreateOptions);
     st = host_NtCreateFile(FileHandle, DesiredAccess, ObjectAttributes,
                            IoStatusBlock, AllocationSize, FileAttributes,
                            ShareAccess, CreateDisposition, CreateOptions);
@@ -2132,6 +2336,7 @@ NTSTATUS __stdcall xbox_NtDeleteFile(PXBOX_OBJECT_ATTRIBUTES ObjectAttributes)
 {
     RAMFS_FIRST(xbox_ramfs_delete(ObjectAttributes, &ramfs_st));
     if (ObjectAttributes && saves_name(ObjectAttributes)) {
+        save_backup_delete_name(ObjectAttributes);
         saves_lock();
         saves_stamp();
         saves_unlock();
@@ -2155,7 +2360,10 @@ NTSTATUS __stdcall xbox_NtSetInformationFile(
 {
     RAMFS_FIRST(xbox_ramfs_set_info(FileHandle, IoStatusBlock, FileInformation,
                                     Length, FileInformationClass, &ramfs_st));
-    saves_touch(FileHandle);
+    if (saves_touch(FileHandle) && FileInformation
+            && FileInformationClass == XboxFileDispositionInformation
+            && ((PXBOX_FILE_DISPOSITION_INFORMATION)FileInformation)->DeleteFile)
+        save_backup_handle(FileHandle);
     return host_NtSetInformationFile(FileHandle, IoStatusBlock, FileInformation,
                                      Length, FileInformationClass);
 }
