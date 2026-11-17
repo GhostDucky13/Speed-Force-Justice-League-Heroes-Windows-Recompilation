@@ -261,7 +261,14 @@ int nv2a_ff_method(struct nv2a_ff_regs *r, uint32_t m, uint32_t p)
     case 0x0298: r->color_material = p; break;       /* SET_COLOR_MATERIAL */
     case 0x09CC: r->texgen_view = p & 1u; break;     /* SET_TEXGEN_VIEW_MODEL */
     case 0x0318: r->point_params_enable = p != 0; break; /* SET_POINT_PARAMS_ENABLE */
-    case 0x031C: g_jlh_point_sprite = p != 0; return 0; /* SET_POINT_SMOOTH_ENABLE (JLH) */
+    case 0x031C:                                     /* SET_POINT_SMOOTH_ENABLE (JLH) */
+        /* Taken (1), never declined: the walker remembers a declined method
+         * and stops passing it here (s_not_vsh), which froze this at its
+         * first value and left every later point sprite without its
+         * coordinates: an invisible particle (Superman's breath, sparks,
+         * laser fire). Nothing else reads the method. */
+        g_jlh_point_sprite = p != 0;
+        return 1;
     case 0x043C:                                     /* SET_POINT_SIZE */
         /* xemu drops a size over V_MAX (0x1FF) and keeps the old one. */
         if (p <= 0x1FFu) {

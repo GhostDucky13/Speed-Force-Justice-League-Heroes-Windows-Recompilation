@@ -35,7 +35,7 @@ import tkinter.font as tkfont
 import urllib.request
 from tkinter import filedialog, messagebox
 
-VERSION = '2.1.1'
+VERSION = '2.1.2'
 REPO = 'GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1008,7 +1008,8 @@ class Builder:
             if saves:
                 cmd += ['--saves', saves]
             self.proc = subprocess.Popen(cmd, cwd=self.install, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                         text=True, errors='replace', start_new_session=True)
+                                         text=True, errors='replace', start_new_session=True,
+                                         env=dict(os.environ, SF_VERSION=VERSION + ' (Linux)'))
             for line in self.proc.stdout:
                 self.q.put(('line', line.rstrip('\n')))
             code = self.proc.wait()
