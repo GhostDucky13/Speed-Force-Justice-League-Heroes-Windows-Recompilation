@@ -14,10 +14,10 @@
 #include <winhttp.h>
 
 #ifndef SF_VERSION
-#define SF_VERSION "2.0.0"
+#define SF_VERSION "2.0.1"
 #endif
 #ifndef SF_GITHUB_REPO
-#define SF_GITHUB_REPO "GhostDucky13/Speed-Force"
+#define SF_GITHUB_REPO "GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation"
 #endif
 #define SF_WIDEN2(x) L##x
 #define SF_WIDEN(x) SF_WIDEN2(x)

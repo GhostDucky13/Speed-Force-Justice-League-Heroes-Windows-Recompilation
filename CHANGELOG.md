@@ -1,11 +1,20 @@
 # Changelog
 
+## 2.0.1
+- Fixed: the build stopped at the Compile step with "[WinError 2] The system cannot find the file
+  specified" on PCs that don't have CMake installed separately. The builder now starts its own
+  CMake, Ninja and clang by their full paths.
+- Fixed: the game no longer crashes at start on a PC with no sound output device; it runs without
+  sound instead.
+- Linux AppImage: light theme by default, dark when the desktop is set to dark (or chosen under
+  "Theme" in the launcher); update information for AppImageUpdate (`.zsync` next to the
+  AppImage); a clear message on Linux versions too old to build (glibc older than 2.34).
+- The update check uses the repository's new address.
+
 ## 2.0.0 Linux
 - New **Linux AppImage** (`SpeedForce-2.0.0-x86_64.AppImage`): the same builder and launcher for
   Linux and Steam Deck. It builds the same game on your PC and runs it with Proton, your system
   Wine, or the Wine it carries (with DXVK and vkd3d-proton), in that order.
-- Fixed: the game crashed at start on a PC with no sound output device (seen under Wine); it now
-  runs without sound instead.
 - The build steps (`setup/sf_install.py`) also run on Linux, cross-compiling with LLVM-MinGW.
 
 ## 2.0.0

@@ -19,7 +19,7 @@
 #include <uxtheme.h>
 #include <stdint.h>
 
-#define SF_VERSION_W L"2.0.0"
+#define SF_VERSION_W L"2.0.1"
 #define NEED_GB 14
 #define WM_APP_LINE (WM_APP + 1)
 #define WM_APP_DONE (WM_APP + 2)
@@ -394,7 +394,7 @@ static void finish_install(void)
         SETS(L"DisplayIcon", game);
         SETS(L"InstallLocation", g.app);
         SETS(L"UninstallString", un);
-        SETS(L"URLInfoAbout", L"https://github.com/GhostDucky13/Speed-Force");
+        SETS(L"URLInfoAbout", L"https://github.com/GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation");
         RegSetValueExW(k, L"NoModify", 0, REG_DWORD, (const BYTE *)&one, 4);
         RegSetValueExW(k, L"NoRepair", 0, REG_DWORD, (const BYTE *)&one, 4);
         RegSetValueExW(k, L"EstimatedSize", 0, REG_DWORD, (const BYTE *)&kb, 4);

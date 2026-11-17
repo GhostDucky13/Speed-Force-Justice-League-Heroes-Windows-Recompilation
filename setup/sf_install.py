@@ -83,6 +83,13 @@ def sha1(path):
 
 def run(cmd, cwd=None, env=None):
     say('  > ' + ' '.join(f'"{c}"' if ' ' in str(c) else str(c) for c in cmd))
+    # Windows looks a bare program name up on THIS process's PATH, not on env['PATH'] (where the
+    # build tools are), so find it on env's PATH first.
+    if env and not os.path.isabs(cmd[0]):
+        exe = shutil.which(cmd[0], path=env.get('PATH'))
+        if not exe:
+            raise RuntimeError(f'{cmd[0]} was not found in the build tools ({env.get("PATH", "")[:300]})')
+        cmd = [exe] + list(cmd[1:])
     p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                          text=True, errors='replace')
     tail = []
@@ -204,14 +211,25 @@ def install(a, app):
                                    os.path.join(tools, 'ninja'), env.get('PATH', '')])
     bdir = os.path.join(work, 'build')
     deps = os.path.join(BUILD, 'deps')
-    if os.name == 'nt':
-        compilers = ['-DCMAKE_C_COMPILER=clang', '-DCMAKE_CXX_COMPILER=clang++', '-DCMAKE_RC_COMPILER=windres']
-    else:   # cross-compile the same Windows program
-        t = 'x86_64-w64-mingw32-'
-        compilers = ['-DCMAKE_SYSTEM_NAME=Windows', '-DCMAKE_SYSTEM_PROCESSOR=AMD64',
-                     '-DCMAKE_C_COMPILER=' + t + 'clang', '-DCMAKE_CXX_COMPILER=' + t + 'clang++',
-                     '-DCMAKE_RC_COMPILER=' + t + 'windres', '-DCMAKE_AR=' + os.path.join(tools, 'llvm', 'bin', 'llvm-ar'),
-                     '-DCMAKE_RANLIB=' + os.path.join(tools, 'llvm', 'bin', 'llvm-ranlib')]
+    llvm = os.path.join(tools, 'llvm', 'bin')
+    ninja = shutil.which('ninja', path=os.path.join(tools, 'ninja'))
+    t = 'x86_64-w64-mingw32-'
+
+    def tool(*names):       # the first of names in the build tools, as a full path for CMake
+        for n in names:
+            f = shutil.which(n, path=llvm)
+            if f:
+                return f.replace('\\', '/')       # CMake reads backslashes as escapes
+        raise RuntimeError(f'{names[0]} is missing from the build tools ({llvm})')
+
+    compilers = ['-DCMAKE_C_COMPILER=' + tool(t + 'clang', 'clang'),
+                 '-DCMAKE_CXX_COMPILER=' + tool(t + 'clang++', 'clang++'),
+                 '-DCMAKE_RC_COMPILER=' + tool(t + 'windres', 'windres', 'llvm-windres')]
+    if os.name != 'nt':     # cross-compile the same Windows program
+        compilers += ['-DCMAKE_SYSTEM_NAME=Windows', '-DCMAKE_SYSTEM_PROCESSOR=AMD64',
+                      '-DCMAKE_AR=' + tool('llvm-ar'), '-DCMAKE_RANLIB=' + tool('llvm-ranlib')]
+    if ninja:
+        compilers.append('-DCMAKE_MAKE_PROGRAM=' + ninja.replace('\\', '/'))
     run(['cmake', '-S', game, '-B', bdir, '-G', 'Ninja', '-DCMAKE_BUILD_TYPE=Release'] + compilers + [
          '-DXBOXRECOMP_DIR=' + tk, '-DXBOXRECOMP_ENHANCE=ON', '-DXBOX_INPUT_SDL_WIN=ON',
          '-DSDL3_DIR=' + os.path.join(deps, 'SDL3', 'cmake'),

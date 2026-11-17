@@ -41,7 +41,7 @@ How to make the dumps from discs you own: [docs/DUMPING.md](docs/DUMPING.md).
 
 ## Installing
 
-1. Download `SpeedForce-Setup-2.0.0.exe` from [Releases](../../releases) and run it. It's one
+1. Download `SpeedForce-Setup-2.0.1.exe` from [Releases](../../releases) and run it. It's one
    program, the **Speed Force Builder**: no administrator rights are needed.
 2. **Game files:** choose where to install (by default `%LOCALAPPDATA%\Programs\Speed Force`) and
    your Xbox and PSP disc images. Each one is checked on the spot, and so is the free space.
@@ -78,8 +78,8 @@ Other dumps are refused by default, because the mod tools patch exact byte offse
 
 ## Linux and Steam Deck
 
-Download `SpeedForce-2.0.0-x86_64.AppImage` from [Releases](../../releases), make it executable
-(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.0.0-x86_64.AppImage`) and
+Download `SpeedForce-2.0.1-x86_64.AppImage` from [Releases](../../releases), make it executable
+(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.0.1-x86_64.AppImage`) and
 open it. The same builder opens, with the same steps: choose the install folder (by default
 `~/Games/Speed Force`) and your two dumps, and it builds the game on your PC. It needs about 9 GB
 free while building and about 5 GB afterwards. When it's done, the AppImage is the launcher
@@ -100,6 +100,12 @@ Notes:
   to use Wine's OpenGL renderer instead; it is slower and frame generation may not be available.
 - DLSS needs Proton with an NVIDIA RTX card; FSR and XeSS work everywhere.
 - The game's log for the Linux side is `SpeedForce-linux.log` in the install folder.
+- Needs a Linux from 2021 or later (glibc 2.34: Ubuntu 22.04, Debian 12, Fedora 35, SteamOS 3 or
+  newer), because of the compiler it carries. The builder tells you if yours is older.
+- The launcher follows your desktop's light or dark setting; change it under "Theme" at the bottom
+  of the sidebar.
+- Updates: the launcher tells you when there is a new version, and the AppImage carries update
+  information, so AppImageUpdate (or a tool like Gear Lever) can update it in place.
 
 ## Controls
 

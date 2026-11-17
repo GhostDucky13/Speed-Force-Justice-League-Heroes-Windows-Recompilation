@@ -35,8 +35,8 @@ import tkinter.font as tkfont
 import urllib.request
 from tkinter import filedialog, messagebox
 
-VERSION = '2.0.0'
-REPO = 'GhostDucky13/Speed-Force'
+VERSION = '2.0.1'
+REPO = 'GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHARE = os.path.dirname(HERE)                       # usr/share/speedforce in the AppImage
@@ -54,13 +54,89 @@ ICON_DIR = os.path.join(os.environ.get('XDG_DATA_HOME') or os.path.join(HOME, '.
                         'icons', 'hicolor', '256x256', 'apps')
 NEED_GB = 9
 
-# ---------------------------------------------------------------- colours (as on Windows)
-BG, BG2, CARD, CARD2 = '#0a0e1c', '#0e1326', '#141b30', '#1a223c'
-BORDER, INPUT, HOVER = '#26304e', '#0c1121', '#222c4c'
-TEXT, SUB, DIM = '#ecf0fa', '#8c98b6', '#5c6886'
-ACCENT, ACCENT2, ACCENTHI = '#ffc428', '#ff8c1e', '#ffd65c'
-OK, BAD = '#3ad29f', '#ff5c5c'
-DARK = '#12141e'
+# ---------------------------------------------------------------- colours
+# Dark is the Windows look; light is used unless the desktop prefers dark (or the player picks it).
+THEMES = {
+    'dark': dict(BG='#0a0e1c', BG2='#0e1326', CARD='#141b30', CARD2='#1a223c', BORDER='#26304e',
+                 INPUT='#0c1121', HOVER='#222c4c', TEXT='#ecf0fa', SUB='#8c98b6', DIM='#5c6886',
+                 ACCENT='#ffc428', ACCENT2='#ff8c1e', ACCENTHI='#ffd65c', ACCENT_TEXT='#ffc428',
+                 ACCENT_TEXT_HI='#ffd65c', OK='#3ad29f', BAD='#ff5c5c', DARK='#12141e', BTN_OFF='#46402a',
+                 DANGER='#461c24', DANGER_HOV='#782830', DANGER_LINE='#8c343c', RING='#3a3218',
+                 OK_BG='#123a32', BAD_BG='#3e1a22', WARN_BG='#3e3418', RULE='#1e2740', ACCENT_BG='#2a2412'),
+    'light': dict(BG='#f6f7fb', BG2='#eceff5', CARD='#ffffff', CARD2='#e3e7f0', BORDER='#cdd3df',
+                  INPUT='#ffffff', HOVER='#dbe0ea', TEXT='#151a2b', SUB='#4c566d', DIM='#8e97ab',
+                  ACCENT='#f5b81c', ACCENT2='#f08a1c', ACCENTHI='#ffca42', ACCENT_TEXT='#9a6400',
+                  ACCENT_TEXT_HI='#b87800', OK='#13805b', BAD='#c62828', DARK='#12141e', BTN_OFF='#e9e2cc',
+                  DANGER='#fbe4e4', DANGER_HOV='#f5c9c9', DANGER_LINE='#e3a0a0', RING='#efe2bb',
+                  OK_BG='#d5f1e6', BAD_BG='#f9dcdc', WARN_BG='#fbefcd', RULE='#e2e6ee', ACCENT_BG='#fff3d2'),
+}
+THEME_CHOICES = ['system', 'light', 'dark']
+THEME_LABELS = {'system': 'System', 'light': 'Light', 'dark': 'Dark'}
+THEME = 'light'
+
+
+def _cmd_out(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=2).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ''
+
+
+def system_prefers_dark():
+    """The desktop's light/dark preference: the XDG portal, then GNOME, KDE and GTK settings."""
+    out = _cmd_out(['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop',
+                    '--object-path', '/org/freedesktop/portal/desktop', '--method',
+                    'org.freedesktop.portal.Settings.ReadOne', 'org.freedesktop.appearance', 'color-scheme'])
+    if not out:     # portals older than version 2 only have Read
+        out = _cmd_out(['gdbus', 'call', '--session', '--dest', 'org.freedesktop.portal.Desktop',
+                        '--object-path', '/org/freedesktop/portal/desktop', '--method',
+                        'org.freedesktop.portal.Settings.Read', 'org.freedesktop.appearance', 'color-scheme'])
+    if 'uint32 1' in out:
+        return True
+    if 'uint32 2' in out:
+        return False
+    gs = _cmd_out(['gsettings', 'get', 'org.gnome.desktop.interface', 'color-scheme'])
+    if 'prefer-dark' in gs:
+        return True
+    if 'prefer-light' in gs:
+        return False
+    kde = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.join(HOME, '.config'), 'kdeglobals')
+    try:
+        with open(kde, encoding='utf-8', errors='replace') as f:
+            sec = ''
+            for line in f:
+                line = line.strip()
+                if line.startswith('['):
+                    sec = line
+                elif sec == '[Colors:Window]' and line.startswith('BackgroundNormal='):
+                    r, g, b = (int(v) for v in line.split('=', 1)[1].split(',')[:3])
+                    return r * 0.299 + g * 0.587 + b * 0.114 < 128
+    except (OSError, ValueError):
+        pass
+    gtk = os.environ.get('GTK_THEME', '') or _cmd_out(['gsettings', 'get', 'org.gnome.desktop.interface',
+                                                       'gtk-theme'])
+    return 'dark' in gtk.lower()
+
+
+def apply_theme(choice):
+    """choice: system, light or dark. Sets the colour names every drawing function reads."""
+    global THEME
+    env = os.environ.get('SPEEDFORCE_THEME', '').lower()
+    if env in THEMES:
+        choice = env
+    THEME = choice if choice in THEMES else ('dark' if system_prefers_dark() else 'light')
+    globals().update(THEMES[THEME])
+
+
+apply_theme('light')
+
+
+def glibc_version():
+    try:
+        v = os.confstr('CS_GNU_LIBC_VERSION').split()[-1]
+        return tuple(int(x) for x in v.split('.')[:2])
+    except (ValueError, OSError, AttributeError, IndexError):
+        return (99, 0)          # not glibc, or unknown: don't block
 
 
 def load_state():
@@ -469,7 +545,8 @@ class UI:
                x + w - r, y + h, x + r, y + h, x, y + h, x, y + h - r, x, y + r, x, y]
         return self.c.create_polygon(pts, smooth=True, splinesteps=12, fill=fill, outline=outline, tags=tags)
 
-    def text(self, x, y, t, font='body', fill=TEXT, anchor='nw', width=None, tags=()):
+    def text(self, x, y, t, font='body', fill=None, anchor='nw', width=None, tags=()):
+        fill = fill or TEXT
         img = self._text_image(str(t), font, fill, width)
         item = self.c.create_image(self.px(x), self.px(y), image=img, anchor=anchor, tags=tags)
         self._items[item] = (str(t), font, width)
@@ -497,12 +574,12 @@ class UI:
         """style 0 secondary, 1 primary (gold), 2 ghost, 3 danger."""
         tag = self._tag()
         if style == 1:
-            fill, hov, tc = (ACCENT, ACCENTHI, DARK) if enabled else ('#46402a', '#46402a', DIM)
+            fill, hov, tc = (ACCENT, ACCENTHI, DARK) if enabled else (BTN_OFF, BTN_OFF, DIM)
             outline = ''
         elif style == 2:
             fill, hov, tc, outline = BG, HOVER, SUB if enabled else DIM, ''
         elif style == 3:
-            fill, hov, tc, outline = '#461c24', '#782830', TEXT, '#8c343c'
+            fill, hov, tc, outline = DANGER, DANGER_HOV, TEXT, DANGER_LINE
         else:
             fill, hov, tc, outline = CARD2, HOVER, TEXT if enabled else DIM, BORDER
         bg = self.round_rect(x, y, w, h, 8, fill, outline, tags=(tag,))
@@ -514,7 +591,7 @@ class UI:
     def link(self, x, y, label, on_click, font='body'):
         tag = self._tag()
         t = self.text(x, y, label, font, SUB, tags=(tag,))
-        self.clickable(tag, on_click, lambda on: self.recolor(t, ACCENTHI if on else SUB))
+        self.clickable(tag, on_click, lambda on: self.recolor(t, ACCENT_TEXT_HI if on else SUB))
 
     def check(self, x, y, label, on, on_click):
         tag = self._tag()
@@ -528,7 +605,7 @@ class UI:
         self.clickable(tag, on_click, None if on else lambda o: self.c.itemconfigure(box, outline=SUB if o else BORDER))
 
     def _icon(self, state, phase=0):
-        key = ('icon', state, phase)
+        key = ('icon', THEME, state, phase)
         if key in self._imgs:
             return self._imgs[key]
         Image, ImageDraw, _ = self.PIL
@@ -540,11 +617,11 @@ class UI:
         lw = max(1, int(self.px(1.6) * k))
         box = [c - r, c - r, c + r, c + r]
         if state == 2:
-            d.ellipse(box, outline='#3a3218', width=int(self.px(2.2) * k))
+            d.ellipse(box, outline=RING, width=int(self.px(2.2) * k))
             d.arc(box, start=phase, end=phase + 110, fill=ACCENT, width=int(self.px(2.4) * k))
         else:
             col = {1: OK, 3: BAD, 4: ACCENT}.get(state, BORDER)
-            fill = {1: '#123a32', 3: '#3e1a22', 4: '#3e3418'}.get(state)
+            fill = {1: OK_BG, 3: BAD_BG, 4: WARN_BG}.get(state)
             d.ellipse(box, outline=col, width=lw, fill=fill)
             w2 = int(self.px(2) * k)
             u = r / 10
@@ -566,7 +643,8 @@ class UI:
         phase = int(time.time() * 360) % 360 // 15 * 15 if state == 2 else 0
         self.c.create_image(self.px(x), self.px(y), image=self._icon(state, phase), anchor='center')
 
-    def progress(self, x, y, w, h, frac, c0=ACCENT2, c1=ACCENT):
+    def progress(self, x, y, w, h, frac, c0=None, c1=None):
+        c0, c1 = c0 or ACCENT2, c1 or ACCENT
         self.round_rect(x, y, w, h, h / 2, CARD2)
         if frac > 0:
             fw = max(h, w * min(1.0, frac))
@@ -662,6 +740,9 @@ class Builder:
                             f'{gb:.0f} GB free here  -  needs about {NEED_GB} GB while building, about 5 GB afterwards.')
         else:
             res['space'] = (0, "You can't write to that folder.")
+        if glibc_version() < (2, 34):     # the bundled compiler needs it
+            res['space'] = (0, f'This Linux is too old to build Speed Force (glibc {".".join(map(str, glibc_version()))}; '
+                               '2.34 or newer: Ubuntu 22.04, Debian 12, Fedora 35, SteamOS 3 or later).')
 
         def disc(path, kind):
             if not path:
@@ -811,7 +892,7 @@ class Builder:
                 else:
                     s = 0
                 if i:
-                    u.line(80, y, 900, y, '#1e2740')
+                    u.line(80, y, 900, y, RULE)
                 u.status(90, y + 17, s)
                 u.text(112, y + 17, name, 'bold' if s == 2 else 'body', SUB if s == 0 else TEXT, anchor='w')
                 detail = {1: 'Done', 2: self.detail, 3: 'Stopped', 4: 'Cancelled'}.get(s, '')
@@ -1122,10 +1203,13 @@ class Launcher:
             u.clickable(tag, lambda k=key: self.go(k),
                         None if on else (lambda o, b=bg: u.c.itemconfigure(b, fill=HOVER if o else BG2)))
         if self.update[0] == 'newer':
-            u.round_rect(16, 540, 188, 48, 8, '#2a2412', ACCENT)
-            u.text(28, 546, 'Update available', 'bold', ACCENT)
+            u.round_rect(16, 540, 188, 48, 8, ACCENT_BG, ACCENT)
+            u.text(28, 546, 'Update available', 'bold', ACCENT_TEXT)
             u.link(28, 566, self.update[1], lambda: open_path(self.update[2]), 'small')
-        u.text(24, 610, f'Version {VERSION}', 'small', DIM)
+        tag = u._tag()
+        t = u.text(24, 600, f'Theme: {THEME_LABELS[self.st.get("theme", "system")]}  ›', 'small', SUB, tags=(tag,))
+        u.clickable(tag, self.next_theme, lambda on: u.recolor(t, ACCENT_TEXT if on else SUB))
+        u.text(24, 618, f'Version {VERSION}', 'small', DIM)
 
     def label(self, i):
         return CHOICES[i][2][self.sel[i]]
@@ -1134,12 +1218,13 @@ class Launcher:
         u = self.ui
         u.round_rect(248, 28, 708, 300, 14, CARD, BORDER)
         u.draw_image('banner', os.path.join(HERE, 'banner.png'), 249, 29, 706, 298)
-        u.text(280, 170, 'Justice League Heroes', 'title')
-        u.text(282, 212, f'Native recompilation  -  Speed Force {VERSION}', 'body', SUB)
+        on_art = THEMES['dark']          # the banner art is dark in both themes
+        u.text(280, 170, 'Justice League Heroes', 'title', on_art['TEXT'])
+        u.text(282, 212, f'Native recompilation  -  Speed Force {VERSION}', 'body', on_art['SUB'])
         u.button(280, 246, 200, 52, 'Play', self.play, 1, not self.status.startswith('!'))
         if self.status:
-            u.text(500, 272, self.status.lstrip('!'), 'small', BAD if self.status.startswith('!') else SUB,
-                   anchor='w', width=430)
+            u.text(500, 272, self.status.lstrip('!'), 'small',
+                   on_art['BAD'] if self.status.startswith('!') else on_art['SUB'], anchor='w', width=430)
         u.round_rect(248, 346, 708, 150, 12, CARD, BORDER)
         u.text(272, 362, 'Current settings', 'h2')
         u.text(272, 396, f'{self.label(0)}  -  output {self.label(1)}  -  {self.label(2)}', 'body', SUB)
@@ -1165,7 +1250,7 @@ class Launcher:
         u.text(x + 256, y + 27, labels[self.sel[i]], 'bold', anchor='center', tags=(tn,))
 
         def hov(on, item):
-            u.recolor(item, ACCENT if on else SUB)
+            u.recolor(item, ACCENT_TEXT if on else SUB)
             self.hint = desc if on else None
             self.draw_hint()
         u.clickable(tp, lambda: self.cycle(i, -1), lambda on: hov(on, ap))
@@ -1262,7 +1347,7 @@ class Launcher:
         msg = {'checking': 'Checking for updates...', 'latest': 'You have the latest version.',
                'newer': f'A new version is available: {self.update[1]}',
                'offline': "Couldn't check for updates (offline?)."}[k]
-        u.text(344, 187, msg, 'body', ACCENT if k == 'newer' else SUB, anchor='w')
+        u.text(344, 187, msg, 'body', ACCENT_TEXT if k == 'newer' else SUB, anchor='w')
         if k == 'newer':
             u.button(740, 170, 196, 34, 'Get the update', lambda: open_path(self.update[2]), 1)
         else:
@@ -1282,7 +1367,7 @@ class Launcher:
         u.c.create_rectangle(u.px(x), u.px(262), u.px(x + 216), u.px(296), fill='', outline='', tags=(tag,))
         a = u.text(x + 200, 278, '›', 'arrow', SUB, anchor='center', tags=(tag,))
         u.text(x + 100, 279, RUNNER_LABELS[choice], 'bold', anchor='center', tags=(tag,))
-        u.clickable(tag, self.next_runner, lambda on: u.recolor(a, ACCENT if on else SUB))
+        u.clickable(tag, self.next_runner, lambda on: u.recolor(a, ACCENT_TEXT if on else SUB))
         # files
         u.round_rect(248, 362, 708, 112, 12, CARD, BORDER)
         u.text(272, 376, 'Files', 'h2')
@@ -1326,6 +1411,15 @@ class Launcher:
         cur = self.st.get('runner', 'auto')
         self.st['runner'] = RUNNERS[(RUNNERS.index(cur) + 1) % len(RUNNERS)]
         save_state(self.st)
+        self.render()
+
+    def next_theme(self):
+        cur = self.st.get('theme', 'system')
+        self.st['theme'] = THEME_CHOICES[(THEME_CHOICES.index(cur) + 1) % len(THEME_CHOICES)]
+        save_state(self.st)
+        apply_theme(self.st['theme'])
+        self.ui.root.configure(bg=BG)
+        self.ui.c.configure(bg=BG)
         self.render()
 
     def recheck(self):
@@ -1417,6 +1511,7 @@ def main():
         except RuntimeError as e:
             print(e, file=sys.stderr)
             return 1
+    apply_theme(st.get('theme', 'system'))
     root = tk.Tk(className='speedforce')
     try:
         root.iconphoto(True, tk.PhotoImage(file=os.path.join(HERE, 'icon.png')))
