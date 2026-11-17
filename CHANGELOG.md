@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0
+- Fixed: no voices in cutscenes and in-game dialogue. The game speaks its dialogue on the center
+  speaker, and only the front left and right speakers reached the output. All six speaker feeds
+  are now folded down to stereo, as the Xbox does with its audio set to stereo (center and
+  surround at -3 dB). Surround-only sounds are back too.
+- Rebuild to get the fix: run the 2.1.0 setup (Windows) or the 2.1.0 AppImage (Linux) over your
+  install; your saves and settings are kept.
+
 ## 2.0.1
 - Fixed: the build stopped at the Compile step with "[WinError 2] The system cannot find the file
   specified" on PCs that don't have CMake installed separately. The builder now starts its own

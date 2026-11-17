@@ -19,7 +19,7 @@
 #include <uxtheme.h>
 #include <stdint.h>
 
-#define SF_VERSION_W L"2.0.1"
+#define SF_VERSION_W L"2.1.0"
 #define NEED_GB 14
 #define WM_APP_LINE (WM_APP + 1)
 #define WM_APP_DONE (WM_APP + 2)

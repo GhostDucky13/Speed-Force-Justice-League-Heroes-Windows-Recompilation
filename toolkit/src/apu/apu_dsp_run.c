@@ -34,7 +34,9 @@
 #include "../kernel/xbox_memory_layout.h"
 #include "../kernel/guest_det_device.h"
 
+#include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* One APU frame is MCPX_APU_GP_FRAME_CYCLES of a DSP's clock (apu_state.h).
@@ -448,18 +450,79 @@ static void silence(MCPXAPUState *d, int off)
            sizeof(d->monitor.frame_buf[0]) * NUM_SAMPLES_PER_FRAME);
 }
 
-/* The GP's stereo output, 24-bit words whose top 16 bits are the sample,
- * into the monitor's frame slot. */
+/* The GP's output, 24-bit words whose top 16 bits are the sample, into the
+ * monitor's frame slot, folded down to stereo.
+ *
+ * The GP leaves the six speaker feeds in its mixbuf bins 0-5 (front left,
+ * front right, center, LFE, surround left, surround right). On the console
+ * the EP turns those into what leaves the box, and with the dashboard set to
+ * stereo (which XC_AUDIO reports here) that is a fold-down of all six into
+ * two. Only bins 0 and 1 were taken, so everything a title sends to the
+ * center speaker was lost: Justice League Heroes speaks its cutscene and
+ * in-game dialogue there, and every line of it was silent. The fold is the
+ * usual one (ITU-R BS.775): center and each surround at -3 dB into its side,
+ * LFE left out, clipped to the 24-bit range. RECOMP_APU_GP_FOLD=0 takes
+ * bins 0 and 1 alone, as before. */
+static int gp_fold_on(void)
+{
+    static int on = -1;
+    if (on < 0) {
+        const char *e = getenv("RECOMP_APU_GP_FOLD");
+        on = !(e && !strcmp(e, "0"));
+    }
+    return on;
+}
+
+static inline int32_t s24(uint32_t w)
+{
+    return (int32_t)(w << 8) >> 8;
+}
+
 static void gp_output(MCPXAPUState *d, ApuDspEmu *gp, int off)
 {
-    uint32_t l[NUM_SAMPLES_PER_FRAME], r[NUM_SAMPLES_PER_FRAME];
-    apu_dsp_emu_read_run(gp, APU_DSP_SPACE_X, GP_OUT_LEFT, l,
-                         NUM_SAMPLES_PER_FRAME);
-    apu_dsp_emu_read_run(gp, APU_DSP_SPACE_X, GP_OUT_RIGHT, r,
-                         NUM_SAMPLES_PER_FRAME);
+    uint32_t bins[6][NUM_SAMPLES_PER_FRAME];
+    int nb = gp_fold_on() ? 6 : 2;
+    for (int b = 0; b < nb; b++)
+        apu_dsp_emu_read_run(gp, APU_DSP_SPACE_X,
+                             GP_OUT_LEFT + (uint32_t)b * NUM_SAMPLES_PER_FRAME,
+                             bins[b], NUM_SAMPLES_PER_FRAME);
     for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++) {
-        d->monitor.frame_buf[off + i][0] = (int16_t)(l[i] >> 8);
-        d->monitor.frame_buf[off + i][1] = (int16_t)(r[i] >> 8);
+        int32_t l = s24(bins[0][i]), r = s24(bins[1][i]);
+        if (nb == 6) {
+            /* 0.70710678 as 23170/32768 */
+            int64_t c = (int64_t)s24(bins[2][i]) * 23170;
+            int64_t sl = (int64_t)s24(bins[4][i]) * 23170;
+            int64_t sr = (int64_t)s24(bins[5][i]) * 23170;
+            int64_t L = (int64_t)l + ((c + sl) >> 15);
+            int64_t R = (int64_t)r + ((c + sr) >> 15);
+            if (L > 0x7FFFFF) L = 0x7FFFFF;
+            if (L < -0x800000) L = -0x800000;
+            if (R > 0x7FFFFF) R = 0x7FFFFF;
+            if (R < -0x800000) R = -0x800000;
+            l = (int32_t)L;
+            r = (int32_t)R;
+        }
+        d->monitor.frame_buf[off + i][0] = (int16_t)(l >> 8);
+        d->monitor.frame_buf[off + i][1] = (int16_t)(r >> 8);
+    }
+    if (s.stats || recomp_env_on(RENV_APU_TRACE) > 0) {
+        static double sq[6];
+        static unsigned frames, secs;
+        for (int b = 0; b < nb; b++)
+            for (int i = 0; i < NUM_SAMPLES_PER_FRAME; i++) {
+                double x = s24(bins[b][i]) / 8388608.0;
+                sq[b] += x * x;
+            }
+        if (++frames % STATS_FRAMES == 0) {
+            secs++;
+            fprintf(stderr, "[APU-GPOUT] t=%us", secs);
+            for (int b = 0; b < nb; b++) {
+                fprintf(stderr, " b%d:%.1f", b,
+                        10.0 * log10(sq[b] / ((double)STATS_FRAMES * NUM_SAMPLES_PER_FRAME) + 1e-18));
+                sq[b] = 0.0;
+            }
+            fprintf(stderr, "\n");
+        }
     }
 }
 

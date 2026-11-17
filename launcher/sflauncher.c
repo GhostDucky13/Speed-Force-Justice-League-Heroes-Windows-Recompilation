@@ -14,7 +14,7 @@
 #include <winhttp.h>
 
 #ifndef SF_VERSION
-#define SF_VERSION "2.0.1"
+#define SF_VERSION "2.1.0"
 #endif
 #ifndef SF_GITHUB_REPO
 #define SF_GITHUB_REPO "GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation"
