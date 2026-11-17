@@ -41,7 +41,7 @@ How to make the dumps from discs you own: [docs/DUMPING.md](docs/DUMPING.md).
 
 ## Installing
 
-1. Download `SpeedForce-Setup-2.1.0.exe` from [Releases](../../releases) and run it. It's one
+1. Download `SpeedForce-Setup-2.1.1.exe` from [Releases](../../releases) and run it. It's one
    program, the **Speed Force Builder**: no administrator rights are needed.
 2. **Game files:** choose where to install (by default `%LOCALAPPDATA%\Programs\Speed Force`) and
    your Xbox and PSP disc images. Each one is checked on the spot, and so is the free space.
@@ -78,8 +78,8 @@ Other dumps are refused by default, because the mod tools patch exact byte offse
 
 ## Linux and Steam Deck
 
-Download `SpeedForce-2.1.0-x86_64.AppImage` from [Releases](../../releases), make it executable
-(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.1.0-x86_64.AppImage`) and
+Download `SpeedForce-2.1.1-x86_64.AppImage` from [Releases](../../releases), make it executable
+(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.1.1-x86_64.AppImage`) and
 open it. The same builder opens, with the same steps: choose the install folder (by default
 `~/Games/Speed Force`) and your two dumps, and it builds the game on your PC. It needs about 9 GB
 free while building and about 5 GB afterwards. When it's done, the AppImage is the launcher

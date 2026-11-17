@@ -166,6 +166,13 @@ def build_maxheroes():
 #     (0x46EEC mov ebx,"charExclude"); with the story flag set it reads "charExclNew" instead.
 #   * WWA: Wonder Woman's model/HUD/status files: worn costume 3 -> the armour set (the game's
 #     own Episode 11 path at 0x7C6B2), otherwise the original check.
+#   * NOAS (2.1.1): no autosave in Challenge Missions. A level change stores its autosave request
+#     in 0x46A3A8 (0x148E74, from 0x148E2D's third argument); at the next level start 0x148EEC
+#     saves to the current slot, and the pause menu's init (CMD_AUTOSAVE_STATUS) opens its
+#     auto-save screen, which asks for a slot when none is set. A challenge is played with
+#     whatever slot was current (the story save loaded earlier, or none, so the player was asked
+#     and picked one), so finishing a challenge overwrote a story save with it. While the
+#     current or the next level is a challenge ("ebon..."), the request is stored as 0.
 HDR = 0x00010E00
 SOH_FIELD, SOH_ORIG, SOH_NEW = 0x108, 0xDF0, 0x1000
 REC1 = 0x001DF639
@@ -188,6 +195,9 @@ RESTART_EP = 0x00067FCE                      # restores the episode-start snapsh
 RST_SITE, RST_ORIG = 0x00148FB3, b'\xE9' + struct.pack('<i', 0x00067FCE - (0x00148FB3 + 5))
 CPS_SITE, CPS_ORIG = 0x00149AF4, bytes.fromhex('6aff') + b'\xE8' + struct.pack('<i', 0x0014903D - (0x00149AF6 + 5)) + b'\x59\xc3'
 NEWGAME_ROW = (0x001504B6, bytes.fromhex('6aff'), bytes.fromhex('6a00'))
+# 2.1.1
+AUTOSAVE_REQ = 0x0046A3A8
+NOAS_SITE, NOAS_ORIG = 0x00148E74, bytes.fromhex('a3a8a34600')   # mov [0x46A3A8],eax
 
 
 def _assemble(base, items):
@@ -269,6 +279,11 @@ def _header_items():
         b'\xB8' + u32(COL_CHARSEL), b'\xF6\x05' + u32(REC1) + b'\x10', b'\x74\x05',
         b'\xB8', ('abs', 'CSN'),
         b'\x59', b'\x50', b'\xFF\xE1',                          # pop ecx ; push eax ; jmp ecx
+        ('label', 'NOAS'),                                   # no autosave in challenges
+        b'\x81\x3D' + u32(CUR_LEVEL) + b'ebon', b'\x74\x12',      # cmp [current],'ebon' ; je Z
+        b'\x81\x3D' + u32(NEXT_LEVEL) + b'ebon', b'\x74\x06',     # cmp [next],'ebon' ; je Z
+        b'\xA3' + u32(AUTOSAVE_REQ), b'\xC3',                   # mov [req],eax ; ret
+        b'\xC7\x05' + u32(AUTOSAVE_REQ) + u32(0), b'\xC3',       # Z: mov dword [req],0 ; ret
         ('label', 'NG'),
         NG_COLUMN + b'\x00',
         ('label', 'CSN'), b'charSelNew\x00',
@@ -294,6 +309,7 @@ def build_header():
         (CS_SITE1, CS_ORIG1, call_site(CS_SITE1, HDR_LABELS['SELCS'])),
         (CS_SITE2, CS_ORIG2, call_site(CS_SITE2, HDR_LABELS['PUSHCS'])),
         (TID_SITE, TID_ORIG, call_site(TID_SITE, HDR_LABELS['SELTID'])),
+        (NOAS_SITE, NOAS_ORIG, call_site(NOAS_SITE, HDR_LABELS['NOAS'])),
     ]
 
 

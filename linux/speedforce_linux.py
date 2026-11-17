@@ -35,7 +35,7 @@ import tkinter.font as tkfont
 import urllib.request
 from tkinter import filedialog, messagebox
 
-VERSION = '2.1.0'
+VERSION = '2.1.1'
 REPO = 'GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation'
 
 HERE = os.path.dirname(os.path.abspath(__file__))

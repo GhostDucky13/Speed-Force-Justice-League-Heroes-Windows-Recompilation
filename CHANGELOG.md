@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.1
+- Fixed: Challenge Missions overwrote story saves (reported on Reddit). A challenge level asked
+  the game to autosave, which wrote into the story save that was loaded, or showed the "pick a
+  slot" screen when none was. Challenge Missions now never save and never show that screen.
+- New: save backups. Before the game overwrites or deletes a save file, the old file is copied to
+  `saves\backup\` (same folder layout) as `<file>.0001.bak`, `.0002.bak`, ... To restore one, copy
+  it back into place and remove the `.<number>.bak` ending. See docs/SAVES.md.
+- Rebuild to get the fixes: run the 2.1.1 setup (Windows) or the 2.1.1 AppImage (Linux) over your
+  install; your saves and settings are kept.
+
 ## 2.1.0
 - Fixed: no voices in cutscenes and in-game dialogue. The game speaks its dialogue on the center
   speaker, and only the front left and right speakers reached the output. All six speaker feeds
