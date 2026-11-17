@@ -12,9 +12,10 @@
 #include <shlobj.h>
 #include <shellapi.h>
 #include <winhttp.h>
+#include <wctype.h>
 
 #ifndef SF_VERSION
-#define SF_VERSION "2.0.1"
+#define SF_VERSION "2.1.0"
 #endif
 #ifndef SF_GITHUB_REPO
 #define SF_GITHUB_REPO "GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation"
@@ -200,9 +201,10 @@ static int cfg_save(void)
 }
 
 /* ---------------------------------------------------------------- the launcher window */
-enum { NAV_PLAY = 1, NAV_SETTINGS, NAV_SAVES, NAV_ABOUT };
+enum { NAV_PLAY = 1, NAV_SETTINGS, NAV_SAVES, NAV_ONLINE, NAV_ABOUT };
 enum { B_PLAY = 300, B_IMPORT, B_OPENSAVES, B_OPENLOG, B_UPDATE, B_CHECK, B_GITHUB, B_UNINSTALL, B_DEFAULTS,
-       B_OPENFOLDER, SEL_BASE = 400, SEL_PREV = 500, VOL = 600 };
+       B_OPENFOLDER, B_HOST, B_JOIN, B_ONLINE_HELP, SEL_BASE = 400, SEL_PREV = 500, VOL = 600,
+       ID_EDIT_PORT = 700, ID_EDIT_ADDR };
 
 static const wchar_t *const k_names[] = {
     L"Resolution scale", L"Output resolution", L"Display", L"Speed Force", L"Upscaler",
@@ -231,6 +233,8 @@ static struct {
     int toast;                       /* ticks left of the "Saved" note */
     int importing;
     wchar_t slots[5][96];
+    HWND e_port, e_addr;             /* the Online page's two fields */
+    wchar_t online_msg[200];
 } L;
 
 /* "v1.2.3" / "1.2" -> comparable number */
@@ -425,7 +429,8 @@ static void paint_sidebar(void)
     nav_item(84, NAV_PLAY, L"Play");
     nav_item(128, NAV_SETTINGS, L"Settings");
     nav_item(172, NAV_SAVES, L"Saves");
-    nav_item(216, NAV_ABOUT, L"About");
+    nav_item(216, NAV_ONLINE, L"Online");
+    nav_item(260, NAV_ABOUT, L"About");
     ui_text(R(24, 600, 180, 18), L"Version " SF_VERSION_W, ui.f_small, C_DIM, DT_SINGLELINE);
     if (L.update_kind == 1) {
         ui_round(R(16, 540, 188, 48), 8, RGBA(255, 196, 40, 30), C_ACCENT);
@@ -572,6 +577,144 @@ static void paint_about(void)
     ui_button(R(776, 440, 160, 36), B_UNINSTALL, L"Uninstall", 3, 1);
 }
 
+
+/* -- Online: two players on two PCs (the game's netplay, RECOMP_NETPLAY) */
+static void online_path(wchar_t *out)
+{
+    swprintf(out, MAX_PATH, L"%ls\\config\\online.txt", g_dir);
+}
+
+static void online_load(void)
+{
+    wchar_t p[MAX_PATH], port[32] = L"47001", addr[256] = L"";
+    FILE *f;
+    online_path(p);
+    f = _wfopen(p, L"r, ccs=UTF-8");
+    if (f) {
+        wchar_t line[300];
+        while (fgetws(line, 300, f)) {
+            wchar_t *nl = wcspbrk(line, L"\r\n");
+            if (nl) *nl = 0;
+            if (!wcsncmp(line, L"port=", 5)) wcsncpy(port, line + 5, 31);
+            if (!wcsncmp(line, L"join=", 5)) wcsncpy(addr, line + 5, 255);
+        }
+        fclose(f);
+    }
+    SetWindowTextW(L.e_port, port);
+    SetWindowTextW(L.e_addr, addr);
+}
+
+static void online_save(void)
+{
+    wchar_t p[MAX_PATH], port[32], addr[256];
+    FILE *f;
+    GetWindowTextW(L.e_port, port, 32);
+    GetWindowTextW(L.e_addr, addr, 256);
+    swprintf(p, MAX_PATH, L"%ls\\config", g_dir);
+    CreateDirectoryW(p, NULL);
+    online_path(p);
+    f = _wfopen(p, L"w, ccs=UTF-8");
+    if (f) {
+        fwprintf(f, L"port=%ls\njoin=%ls\n", port, addr);
+        fclose(f);
+    }
+}
+
+static void trim(wchar_t *s)
+{
+    size_t n = wcslen(s), i = 0;
+    while (n && iswspace(s[n - 1])) s[--n] = 0;
+    while (s[i] && iswspace(s[i])) i++;
+    if (i) memmove(s, s + i, (wcslen(s + i) + 1) * sizeof(wchar_t));
+}
+
+static void play_online(int host)
+{
+    wchar_t exe[MAX_PATH], spec[300], port[32], addr[256];
+    STARTUPINFOW si;
+    PROCESS_INFORMATION pi;
+    GetWindowTextW(L.e_port, port, 32);
+    GetWindowTextW(L.e_addr, addr, 256);
+    trim(port);
+    trim(addr);
+    L.online_msg[0] = 0;
+    if (host) {
+        long n = wcstol(port, NULL, 10);
+        if (n < 1024 || n > 65535) {
+            wcscpy(L.online_msg, L"Choose a port between 1024 and 65535 (47001 is a good default).");
+            return;
+        }
+        swprintf(spec, 300, L"host:%ld", n);
+    } else {
+        const wchar_t *colon = wcsrchr(addr, L':');
+        if (!addr[0]) {
+            wcscpy(L.online_msg, L"Type the host's address, like 203.0.113.5:47001.");
+            return;
+        }
+        if (!colon)
+            swprintf(spec, 300, L"join:%ls:47001", addr);    /* the default port */
+        else
+            swprintf(spec, 300, L"join:%ls", addr);
+    }
+    online_save();
+    SetEnvironmentVariableW(L"RECOMP_NETPLAY", spec);
+    swprintf(exe, MAX_PATH, L"%ls\\SpeedForce.exe", g_dir);
+    memset(&si, 0, sizeof si);
+    si.cb = sizeof si;
+    if (CreateProcessW(exe, NULL, NULL, NULL, FALSE, 0, NULL, g_dir, &si, &pi)) {
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        PostMessageW(ui.wnd, WM_CLOSE, 0, 0);
+    } else {
+        wcscpy(L.online_msg, L"SpeedForce.exe could not be started. Run the Speed Force setup again.");
+    }
+    SetEnvironmentVariableW(L"RECOMP_NETPLAY", NULL);
+}
+
+static void paint_online(void)
+{
+    RECT box;
+    ui_text(R(248, 22, 400, 34), L"Online", ui.f_h1, C_TEXT, DT_SINGLELINE);
+    ui_text(R(250, 56, 700, 36),
+            L"Play the two-player game with a friend on another PC. Both of you need this version of Speed Force, "
+            L"built from the same USA discs. The host's saves are used.", ui.f_small, C_SUB, DT_WORDBREAK);
+
+    ui_round(R(248, 100, 346, 236), 12, C_CARD, C_BORDER);
+    ui_text(R(272, 116, 300, 24), L"Host (player 1)", ui.f_h2, C_TEXT, DT_SINGLELINE);
+    ui_text(R(272, 144, 300, 18), L"Port", ui.f_small, C_SUB, DT_SINGLELINE);
+    box = R(272, 166, 140, 40);
+    ui_input_box(box, GetFocus() == L.e_port);
+    ui_place_edit(L.e_port, box);
+    ui_button(R(424, 166, 146, 40), B_HOST, L"Host game", 1, 1);
+    ui_text(R(272, 220, 300, 104),
+            L"A window then shows the address your friend types. Speed Force asks your router to open the port "
+            L"(UPnP).", ui.f_small, C_DIM, DT_WORDBREAK);
+
+    ui_round(R(610, 100, 346, 236), 12, C_CARD, C_BORDER);
+    ui_text(R(634, 116, 300, 24), L"Join (player 2)", ui.f_h2, C_TEXT, DT_SINGLELINE);
+    ui_text(R(634, 144, 300, 18), L"Host's address", ui.f_small, C_SUB, DT_SINGLELINE);
+    box = R(634, 166, 298, 40);
+    ui_input_box(box, GetFocus() == L.e_addr);
+    ui_place_edit(L.e_addr, box);
+    ui_button(R(634, 218, 146, 40), B_JOIN, L"Join game", 1, 1);
+    ui_text(R(634, 270, 300, 54), L"Like 203.0.113.5:47001, as the host's window shows it.", ui.f_small, C_DIM,
+            DT_WORDBREAK);
+
+    if (L.online_msg[0])
+        ui_text(R(250, 344, 700, 20), L.online_msg, ui.f_small, C_BAD, DT_SINGLELINE);
+
+    ui_round(R(248, 370, 708, 200), 12, C_CARD, C_BORDER);
+    ui_text(R(272, 386, 600, 22), L"If your friend can't connect", ui.f_h2, C_TEXT, DT_SINGLELINE);
+    ui_text(R(272, 414, 660, 150),
+            L"- On the host's router, forward the TCP port (47001) to the host's PC; the host's window shows the "
+            L"addresses to use.\n"
+            L"- Or both install Tailscale or ZeroTier (free), join the same network, and join with the host's "
+            L"Tailscale / ZeroTier address.\n"
+            L"- On the same network at home, join with the host's local address (192.168...).\n"
+            L"Input lag is set from the ping: about 0.1 s on a good connection. The game waits if one PC falls behind.",
+            ui.f_small, C_SUB, DT_WORDBREAK);
+}
+
 static void paint(void)
 {
     UiPaint p;
@@ -580,7 +723,10 @@ static void paint(void)
     if (L.nav == NAV_PLAY) paint_play();
     else if (L.nav == NAV_SETTINGS) paint_settings();
     else if (L.nav == NAV_SAVES) paint_saves();
+    else if (L.nav == NAV_ONLINE) paint_online();
     else paint_about();
+    ShowWindow(L.e_port, L.nav == NAV_ONLINE ? SW_SHOW : SW_HIDE);
+    ShowWindow(L.e_addr, L.nav == NAV_ONLINE ? SW_SHOW : SW_HIDE);
     ui_end(&p);
 }
 
@@ -742,6 +888,8 @@ static void command(int id)
     } else {
         switch (id) {
         case B_PLAY: play(); break;
+        case B_HOST: play_online(1); InvalidateRect(ui.wnd, NULL, FALSE); break;
+        case B_JOIN: play_online(0); InvalidateRect(ui.wnd, NULL, FALSE); break;
         case B_IMPORT: import_saves(); break;
         case B_OPENSAVES: {
             wchar_t p[MAX_PATH];
@@ -819,6 +967,14 @@ static LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         if (L.toast > 0 && --L.toast == 0) InvalidateRect(h, NULL, FALSE);
         return 0;
     case WM_APP_UPDATE: on_update((int)wp, (wchar_t *)lp); return 0;
+    case WM_CTLCOLOREDIT:
+        SetTextColor((HDC)wp, ui_cr(C_TEXT));
+        SetBkColor((HDC)wp, ui_cr(C_INPUT));
+        return (LRESULT)ui.input_brush;
+    case WM_COMMAND:
+        if (HIWORD(wp) == EN_SETFOCUS || HIWORD(wp) == EN_KILLFOCUS)
+            InvalidateRect(h, NULL, FALSE);
+        return 0;
     case WM_APP_DONE:
         L.importing = 0;
         scan_saves();
@@ -889,6 +1045,11 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmdline, int show)
         if (GetFileAttributesW(exe) == INVALID_FILE_ATTRIBUTES)
             wcscpy(L.status, L"Speed Force isn't built in this folder. Run the Speed Force setup to build it.");
     }
+    L.e_port = ui_edit(ID_EDIT_PORT);
+    L.e_addr = ui_edit(ID_EDIT_ADDR);
+    ShowWindow(L.e_port, SW_HIDE);
+    ShowWindow(L.e_addr, SW_HIDE);
+    online_load();
     settings_load();
     scan_saves();
     SetTimer(ui.wnd, 1, 50, NULL);

@@ -61,6 +61,7 @@
 #include <xbox/xboxrecomp.h>
 #include "video/video_player.h"   /* xbox_HostWindowSetTitle, xbox_HostWindowMain */
 #include "usb/ohci.h"              /* xbox_OhciInit: the pad's USB controller */
+#include "usb/netplay.h"           /* online play (RECOMP_NETPLAY) */
 #ifdef RECOMP_ENV_HAVE_ENHANCE_KEYS   /* the toolkit's opt-in enhancements layer */
 #include "enhance.h"
 #include "enhance_cfg.h"
@@ -1191,6 +1192,351 @@ static void jlh_installed_defaults(void)
 }
 #endif
 
+/* ---- online play (RECOMP_NETPLAY, set by the launcher's Online page) ------
+ *
+ * Both PCs run the whole game with the two players' controllers swapped
+ * every frame (toolkit usb/netplay.h). That keeps them together only if both
+ * run the same code on the same files and saves, in the deterministic mode.
+ * So before the kernel starts: turn that mode on, connect, check that the
+ * other side has the same Speed Force version and game files, and give the
+ * joiner the host's saves and language. */
+#define JLH_NETPLAY_VERSION "Speed Force 2.1.0 netplay 1"
+
+static uint64_t fnv(uint64_t h, const void *p, size_t n)
+{
+    const unsigned char *c = (const unsigned char *)p;
+    while (n--)
+        h = (h ^ *c++) * 0x100000001B3ULL;
+    return h;
+}
+
+/* A file's size, and its first and last 64 KB. */
+static uint64_t fp_file(uint64_t h, const char *path)
+{
+    static unsigned char buf[65536];
+    FILE *f = fopen(path, "rb");
+    long long size;
+    size_t n;
+    if (!f)
+        return fnv(h, "missing", 7);
+    _fseeki64(f, 0, SEEK_END);
+    size = _ftelli64(f);
+    h = fnv(h, &size, sizeof size);
+    _fseeki64(f, 0, SEEK_SET);
+    n = fread(buf, 1, sizeof buf, f);
+    h = fnv(h, buf, n);
+    if (size > (long long)sizeof buf) {
+        _fseeki64(f, size - (long long)sizeof buf, SEEK_SET);
+        n = fread(buf, 1, sizeof buf, f);
+        h = fnv(h, buf, n);
+    }
+    fclose(f);
+    return h;
+}
+
+static int name_cmp(const void *a, const void *b)
+{
+    return _stricmp(*(char *const *)a, *(char *const *)b);
+}
+
+/* Every file under dir (names relative to root), sorted, into the hash. */
+static uint64_t fp_dir(uint64_t h, const char *root, const char *rel)
+{
+    char pat[1200], path[1200];
+    WIN32_FIND_DATAA fd;
+    HANDLE f;
+    char **names = NULL;
+    int n = 0, cap = 0, i;
+    snprintf(pat, sizeof pat, "%s\\%s%s*", root, rel, rel[0] ? "\\" : "");
+    f = FindFirstFileA(pat, &fd);
+    if (f == INVALID_HANDLE_VALUE)
+        return h;
+    do {
+        if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, ".."))
+            continue;
+        if (n == cap) {
+            cap = cap ? cap * 2 : 256;
+            names = (char **)realloc(names, sizeof(char *) * (size_t)cap);
+        }
+        names[n] = (char *)malloc(MAX_PATH + 2);
+        snprintf(names[n], MAX_PATH + 2, "%c%s", (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 'd' : 'f',
+                 fd.cFileName);
+        n++;
+    } while (FindNextFileA(f, &fd));
+    FindClose(f);
+    qsort(names, (size_t)n, sizeof(char *), name_cmp);
+    for (i = 0; i < n; i++) {
+        char sub[1200];
+        snprintf(sub, sizeof sub, "%s%s%s", rel, rel[0] ? "\\" : "", names[i] + 1);
+        h = fnv(h, sub, strlen(sub));
+        if (names[i][0] == 'd') {
+            h = fp_dir(h, root, sub);
+        } else {
+            snprintf(path, sizeof path, "%s\\%s", root, sub);
+            h = fp_file(h, path);
+        }
+        free(names[i]);
+    }
+    free(names);
+    return h;
+}
+
+/* The saves folder as one blob: {u16 name length, name, u32 size, 3 FILETIMEs, data}... */
+static void pack_dir(const char *root, const char *rel, char **buf, size_t *len, size_t *cap)
+{
+    char pat[1200], path[1200];
+    WIN32_FIND_DATAA fd;
+    HANDLE f;
+    snprintf(pat, sizeof pat, "%s\\%s%s*", root, rel, rel[0] ? "\\" : "");
+    f = FindFirstFileA(pat, &fd);
+    if (f == INVALID_HANDLE_VALUE)
+        return;
+    do {
+        char sub[1200];
+        if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, ".."))
+            continue;
+        snprintf(sub, sizeof sub, "%s%s%s", rel, rel[0] ? "\\" : "", fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            pack_dir(root, sub, buf, len, cap);
+        } else {
+            FILE *in;
+            uint16_t nl = (uint16_t)strlen(sub);
+            uint32_t size = fd.nFileSizeLow;
+            if (fd.nFileSizeHigh || size > (16u << 20))
+                continue;
+            while (*len + 2 + nl + 4 + 24 + size > *cap) {
+                *cap = *cap ? *cap * 2 : (1u << 20);
+                *buf = (char *)realloc(*buf, *cap);
+            }
+            snprintf(path, sizeof path, "%s\\%s", root, sub);
+            in = fopen(path, "rb");
+            if (!in)
+                continue;
+            memcpy(*buf + *len, &nl, 2);
+            memcpy(*buf + *len + 2, sub, nl);
+            memcpy(*buf + *len + 2 + nl, &size, 4);
+            /* the times too: the game reads a save's date */
+            memcpy(*buf + *len + 6 + nl, &fd.ftCreationTime, 8);
+            memcpy(*buf + *len + 14 + nl, &fd.ftLastAccessTime, 8);
+            memcpy(*buf + *len + 22 + nl, &fd.ftLastWriteTime, 8);
+            if (fread(*buf + *len + 30 + nl, 1, size, in) == size)
+                *len += 30 + nl + size;
+            fclose(in);
+        }
+    } while (FindNextFileA(f, &fd));
+    FindClose(f);
+}
+
+static void unpack_dir(const char *root, const char *p, size_t len)
+{
+    size_t off = 0;
+    while (off + 6 <= len) {
+        uint16_t nl;
+        uint32_t size;
+        char sub[1024], path[1200], *slash;
+        FILE *out;
+        memcpy(&nl, p + off, 2);
+        if (off + 6 + nl > len || nl >= sizeof sub)
+            break;
+        memcpy(sub, p + off + 2, nl);
+        sub[nl] = 0;
+        memcpy(&size, p + off + 2 + nl, 4);
+        if (off + 30 + nl + size > len || strstr(sub, ".."))
+            break;
+        snprintf(path, sizeof path, "%s\\%s", root, sub);
+        for (slash = path + strlen(root) + 1; (slash = strchr(slash, '\\')) != NULL; slash++) {
+            *slash = 0;
+            CreateDirectoryA(path, NULL);
+            *slash = '\\';
+        }
+        out = fopen(path, "wb");
+        if (out) {
+            HANDLE h;
+            FILETIME t[3];
+            fwrite(p + off + 30 + nl, 1, size, out);
+            fclose(out);
+            memcpy(t, p + off + 6 + nl, 24);
+            h = CreateFileA(path, FILE_WRITE_ATTRIBUTES, 0, NULL, OPEN_EXISTING, 0, NULL);
+            if (h != INVALID_HANDLE_VALUE) {
+                SetFileTime(h, &t[0], &t[1], &t[2]);
+                CloseHandle(h);
+            }
+        }
+        off += 30 + nl + size;
+    }
+}
+
+static void wipe_dir(const char *dir)
+{
+    char pat[1200], path[1200];
+    WIN32_FIND_DATAA fd;
+    HANDLE f;
+    snprintf(pat, sizeof pat, "%s\\*", dir);
+    f = FindFirstFileA(pat, &fd);
+    if (f == INVALID_HANDLE_VALUE)
+        return;
+    do {
+        if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, ".."))
+            continue;
+        snprintf(path, sizeof path, "%s\\%s", dir, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            wipe_dir(path);
+            RemoveDirectoryA(path);
+        } else {
+            DeleteFileA(path);
+        }
+    } while (FindNextFileA(f, &fd));
+    FindClose(f);
+}
+
+static void copy_tree(const char *from, const char *to)
+{
+    char pat[1200], a[1200], b[1200];
+    WIN32_FIND_DATAA fd;
+    HANDLE f;
+    CreateDirectoryA(to, NULL);
+    snprintf(pat, sizeof pat, "%s\\*", from);
+    f = FindFirstFileA(pat, &fd);
+    if (f == INVALID_HANDLE_VALUE)
+        return;
+    do {
+        if (!strcmp(fd.cFileName, ".") || !strcmp(fd.cFileName, ".."))
+            continue;
+        snprintf(a, sizeof a, "%s\\%s", from, fd.cFileName);
+        snprintf(b, sizeof b, "%s\\%s", to, fd.cFileName);
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+            copy_tree(a, b);
+        else
+            CopyFileA(a, b, FALSE);
+    } while (FindNextFileA(f, &fd));
+    FindClose(f);
+}
+
+static void jlh_netplay_fail(const char *why)
+{
+    netplay_close_window();
+    MessageBoxA(NULL, why, "Speed Force - Online", MB_OK | MB_ICONWARNING);
+    ExitProcess(1);
+}
+
+static void jlh_netplay_setup(void)
+{
+    const char *spec = getenv("RECOMP_NETPLAY");
+    const char *games = getenv("RECOMP_GAME_FILES");
+    char err[512], dir[1024] = ".", buf[1100];
+    struct {
+        char version[48];
+        uint64_t files;
+        char lang[16];
+    } me, them;
+    uint32_t n;
+    void *r;
+
+    if (!spec || !*spec)
+        return;
+    if (games && *games)
+        snprintf(dir, sizeof dir, "%s", games);
+    /* A fresh data root for the session on both sides: the hard disk's
+     * partition images and caches (under %LOCALAPPDATA%\xboxrecomp) differ
+     * from PC to PC and the game reads them. Only the shader cache comes
+     * along, so the first frames don't stutter. */
+    {
+        const char *la = getenv("LOCALAPPDATA");
+        char session[1100], shaders[1200], to[1200];
+        snprintf(session, sizeof session, "%s\\netplay", dir);
+        CreateDirectoryA(session, NULL);
+        snprintf(session, sizeof session, "%s\\netplay\\appdata", dir);
+        CreateDirectoryA(session, NULL);
+        wipe_dir(session);
+        if (la && *la) {
+            snprintf(shaders, sizeof shaders, "%s\\xboxrecomp\\57520001\\ShaderCache", la);
+            snprintf(to, sizeof to, "%s\\xboxrecomp", session);
+            CreateDirectoryA(to, NULL);
+            snprintf(to, sizeof to, "%s\\xboxrecomp\\57520001", session);
+            CreateDirectoryA(to, NULL);
+            snprintf(to, sizeof to, "%s\\xboxrecomp\\57520001\\ShaderCache", session);
+            copy_tree(shaders, to);
+        }
+        _putenv_s("LOCALAPPDATA", session);
+    }
+    /* the deterministic mode (the code is generated for it: --back-edge-yield) */
+    _putenv_s("RECOMP_GUEST_LOCK", "1");
+    {
+        const char *dbg = getenv("RECOMP_DEBUG");
+        if (!dbg || !strstr(dbg, "deterministic")) {
+            snprintf(buf, sizeof buf, "%s%sdeterministic", dbg && *dbg ? dbg : "", dbg && *dbg ? "," : "");
+            _putenv_s("RECOMP_DEBUG", buf);
+        }
+    }
+    /* what has to match: this build, default.xbe, every game file, any mods */
+    memset(&me, 0, sizeof me);
+    snprintf(me.version, sizeof me.version, "%s", JLH_NETPLAY_VERSION);
+    snprintf(buf, sizeof buf, "%s\\default.xbe", dir);
+    me.files = fp_file(0xCBF29CE484222325ULL, buf);
+    snprintf(buf, sizeof buf, "%s\\res", dir);
+    me.files = fp_dir(me.files, buf, "");
+    snprintf(buf, sizeof buf, "%s\\mods", dir);
+    me.files = fp_dir(me.files, buf, "");
+    snprintf(me.lang, sizeof me.lang, "%s", getenv("RECOMP_SYSTEM_LANGUAGE") ? getenv("RECOMP_SYSTEM_LANGUAGE") : "");
+
+    if (netplay_connect(spec, err, sizeof err) != 0)
+        jlh_netplay_fail(err);
+    if (netplay_send_blob(&me, sizeof me) || !(r = netplay_recv_blob(&n)) || n != sizeof them)
+        jlh_netplay_fail("The connection to the other player was lost.");
+    memcpy(&them, r, sizeof them);
+    free(r);
+    if (strcmp(me.version, them.version)) {
+        snprintf(err, sizeof err, "The other player has a different Speed Force version.\n\n"
+                 "You: %s\nThem: %.47s\n\nBoth need the same version.", me.version, them.version);
+        jlh_netplay_fail(err);
+    }
+    if (me.files != them.files)
+        jlh_netplay_fail("Your game files differ from the other player's.\n\n"
+                         "Both of you need Speed Force built from the USA Xbox and PSP discs, with no mods. "
+                         "Rebuild the game from the launcher (About > Rebuild) and try again.");
+    if (netplay_is_host()) {
+        /* the host's saves and language for both, and the input delay for the ping */
+        const char *saves = getenv("RECOMP_SAVE_DIR");
+        char *blob = NULL;
+        size_t len = 0, cap = 0;
+        int delay = netplay_delay_for_rtt(netplay_rtt_ms());
+        const char *d = getenv("RECOMP_NETPLAY_DELAY");
+        if (d && atoi(d) > 0)
+            delay = atoi(d);
+        if (saves && *saves)
+            pack_dir(saves, "", &blob, &len, &cap);
+        if (netplay_send_blob(&delay, 4) || netplay_send_blob(blob ? blob : "", (uint32_t)len))
+            jlh_netplay_fail("The connection to the other player was lost.");
+        free(blob);
+        netplay_status("Connected. Starting the game...");
+        netplay_close_window();
+        netplay_start(delay, 300);
+    } else {
+        int delay;
+        char saves[1100];
+        if (!(r = netplay_recv_blob(&n)) || n != 4)
+            jlh_netplay_fail("The connection to the other player was lost.");
+        memcpy(&delay, r, 4);
+        free(r);
+        if (!(r = netplay_recv_blob(&n)))
+            jlh_netplay_fail("The connection to the other player was lost.");
+        /* the host's saves, in a folder of their own: the joiner's are left alone */
+        snprintf(saves, sizeof saves, "%s\\netplay\\saves", dir);
+        CreateDirectoryA(saves, NULL);
+        wipe_dir(saves);
+        unpack_dir(saves, (const char *)r, n);
+        free(r);
+        _putenv_s("RECOMP_SAVE_DIR", saves);
+        if (them.lang[0])
+            _putenv_s("RECOMP_SYSTEM_LANGUAGE", them.lang);
+        else
+            _putenv_s("RECOMP_SYSTEM_LANGUAGE", "");
+        netplay_status("Connected. Starting the game...");
+        netplay_close_window();
+        netplay_start(delay, 300);
+    }
+}
+
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
                    LPSTR lpCmdLine, int nCmdShow)
 {
@@ -1201,6 +1547,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
     jlh_dpi_aware();
 #if defined(_WIN32)
     jlh_installed_defaults();
+    jlh_netplay_setup();
 #endif
     recomp_env_init();   /* the environment, read once, before any thread */
     host_stdio_setup();
@@ -1228,6 +1575,7 @@ int main(int argc, char **argv)
 #endif
 #if defined(_WIN32)
     jlh_installed_defaults();
+    jlh_netplay_setup();
 #endif
     recomp_env_init();   /* the environment, read once, before any thread */
     host_stdio_setup();

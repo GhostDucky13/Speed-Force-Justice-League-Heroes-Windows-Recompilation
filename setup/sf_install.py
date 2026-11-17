@@ -201,7 +201,9 @@ def install(a, app):
     pymod('tools.func_id', [xbe], tk)
     pymod('tools.abi_analysis', [xbe], tk)
     # the mod's code in the XBE header is added to the lifter's section layout
+    # --back-edge-yield and the KickOff spin-wait site: the deterministic mode online play runs in
     run([sys.executable, os.path.join(game, 'seeds', 'recomp_with_cave.py'), xbe, '--all', '--split', '250',
+         '--back-edge-yield', '--spin-waits', os.path.join(game, 'seeds', 'spin_waits.json'),
          '--gen-dir', gen], cwd=tk)
 
     step(6, 'Compiling (about 5-15 minutes, depending on the CPU)')

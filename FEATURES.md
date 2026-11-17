@@ -91,6 +91,12 @@ allows, while the game itself keeps running at 60.
 - **Two players on one PC**, each with their own controller, as on the Xbox: pick Two Players
   for a new game or Chapter Select, or add (and remove) player 2 from the pause menu at any
   time. In the character selector both players choose their own hero and costume.
+- **Online play** (2.1): the same two-player game with a friend on another PC, through the
+  launcher's Online page. Delay-based netplay: each PC runs the whole game in the toolkit's
+  deterministic mode, sends its player's controller every frame, and both feed the two
+  controllers to ports 1 and 2. A memory checksum is compared every 5 seconds to catch a desync.
+  The host's saves are sent to the joiner; the game checks that both have the same version and
+  game files; the input delay comes from the ping; Windows hosts open the router port by UPnP.
 
 ---
 

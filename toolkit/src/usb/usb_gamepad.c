@@ -13,6 +13,7 @@
  */
 #include "usb_gamepad.h"
 #include "pad_script.h"
+#include "netplay.h"
 #include "recomp_env.h"
 #include "recomp_exit_hook.h"   /* the recorder's held steps at exit */
 
@@ -759,6 +760,8 @@ static uint32_t script_pads(void)
 uint32_t usb_gamepad_present(void)
 {
     uint32_t m = script_pads();
+    if (netplay_on())
+        m |= 3u;                        /* both players' ports */
     if (s_source && s_source->present)
         m |= s_source->present();
     return m & ((1u << USB_GAMEPAD_MAX) - 1u);
@@ -1041,7 +1044,7 @@ static void poll_done(int pad)
     }
 }
 
-int usb_gamepad_report(int pad, uint8_t *out, int max)
+static int report_body(int pad, uint8_t *out, int max)
 {
     XBOX_INPUT_STATE state;
     const XBOX_GAMEPAD *g;
@@ -1103,7 +1106,6 @@ int usb_gamepad_report(int pad, uint8_t *out, int max)
         out[2] = synth;
         pad_script_apply(pad, out, script_at(flip, polls));
         pad_record(pad, out, rec_poll() ? polls : flip);
-        poll_done(pad);
         return 20;
     }
 
@@ -1112,8 +1114,39 @@ int usb_gamepad_report(int pad, uint8_t *out, int max)
     out[2] |= synth;
     pad_script_apply(pad, out, script_at(flip, polls));
     pad_record(pad, out, rec_poll() ? polls : flip);
-    poll_done(pad);
     return 20;
+}
+
+/* netplay (netplay.h): port 0's poll is the frame. This side's controller
+ * is made as port 0's report always is (host pad 0, scripts), sent, and the
+ * two players' reports for this poll go to ports 1 and 2. */
+static uint8_t s_np_port2[20] = {0, 20};
+
+int usb_gamepad_report(int pad, uint8_t *out, int max)
+{
+    if (max < 20)
+        return 0;
+    if (netplay_on()) {
+        if (pad == 0) {
+            uint8_t local[20], ports[2][20];
+            report_body(0, local, 20);
+            netplay_frame(local, ports);
+            memcpy(out, ports[0], 20);
+            memcpy(s_np_port2, ports[1], 20);
+            poll_done(0);
+        } else if (pad == 1) {
+            memcpy(out, s_np_port2, 20);
+        } else {
+            memset(out, 0, 20);
+            out[1] = 20;
+        }
+        return 20;
+    }
+    {
+        int n = report_body(pad, out, max);
+        poll_done(pad);
+        return n;
+    }
 }
 
 /* ---- a game's own XInputGetState --------------------------------------- */

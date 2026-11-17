@@ -22,7 +22,8 @@ more. See [FEATURES.md](FEATURES.md) for a detailed explanation of everything.
   Challenge Missions and three PSP-only story levels.
 - **A Costume button** in the character selector for Chapter Select and Challenge Missions, with
   **Wonder Woman's last-mission costume** available too.
-- Two players on one PC, each with their own controller.
+- Two players on one PC, each with their own controller, or **online with a friend on another
+  PC** (the launcher's Online page).
 - Bring your **Xbox saves** over; completed saves start Episode 1 the Chapter Select way.
 
 > **No game code or data is included in this repository or in the setup.**
@@ -41,7 +42,7 @@ How to make the dumps from discs you own: [docs/DUMPING.md](docs/DUMPING.md).
 
 ## Installing
 
-1. Download `SpeedForce-Setup-2.0.1.exe` from [Releases](../../releases) and run it. It's one
+1. Download `SpeedForce-Setup-2.1.0.exe` from [Releases](../../releases) and run it. It's one
    program, the **Speed Force Builder**: no administrator rights are needed.
 2. **Game files:** choose where to install (by default `%LOCALAPPDATA%\Programs\Speed Force`) and
    your Xbox and PSP disc images. Each one is checked on the spot, and so is the free space.
@@ -78,8 +79,8 @@ Other dumps are refused by default, because the mod tools patch exact byte offse
 
 ## Linux and Steam Deck
 
-Download `SpeedForce-2.0.1-x86_64.AppImage` from [Releases](../../releases), make it executable
-(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.0.1-x86_64.AppImage`) and
+Download `SpeedForce-2.1.0-x86_64.AppImage` from [Releases](../../releases), make it executable
+(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.1.0-x86_64.AppImage`) and
 open it. The same builder opens, with the same steps: choose the install folder (by default
 `~/Games/Speed Force`) and your two dumps, and it builds the game on your PC. It needs about 9 GB
 free while building and about 5 GB afterwards. When it's done, the AppImage is the launcher
@@ -106,6 +107,28 @@ Notes:
   of the sidebar.
 - Updates: the launcher tells you when there is a new version, and the AppImage carries update
   information, so AppImageUpdate (or a tool like Gear Lever) can update it in place.
+
+## Playing online
+
+Two players on two PCs, through the launcher's **Online** page: one player hosts, the other
+joins with the address the host's window shows. Both PCs run the whole game and swap only their
+controllers every frame, so the game plays exactly as two players on one couch.
+
+- Both players need **the same Speed Force version, built from the USA discs**, with no mods.
+  The game checks this when you connect.
+- The **host's saves** are used for the session (the joiner's own saves are left alone). Pick
+  Two Players in a new game or Chapter Select, or add player 2 from the pause menu.
+- **Connecting:** on Windows the host's PC asks the router to open the port (UPnP). If that
+  doesn't work, forward the TCP port (default 47001) on the host's router to the host's PC, or
+  both join the same free Tailscale or ZeroTier network and use that address. On the same home
+  network, join with the host's local address.
+- **Input delay** is set from the ping when you connect: about 4 to 8 frames (0.07 to 0.13 s).
+  If one PC falls behind, both wait for it.
+- **Your PC needs some headroom:** online play runs the game in a strict, step-by-step mode so
+  both PCs stay identical, which costs more CPU than normal play. If the game runs below 60 fps
+  online, lower the resolution scale and turn off frame generation.
+- If a player leaves, the other can keep playing. If the two games ever get out of sync, the
+  game says so; start the online session again.
 
 ## Controls
 
@@ -136,6 +159,10 @@ launcher are plain Win32 C with a small shared UI (`launcher/sfui.h`).
 | `docs/` | Dumping, building, and the mod's technical notes |
 
 ## Known issues
+
+- Online play: the deterministic mode it needs is slower than normal play (on the test PC
+  about 64 fps of headroom with one copy), so weaker PCs may run below 60 fps online. Not yet
+  tested between two different PCs over the internet.
 
 - Episode 5, Mars (e5l1): laser fire can be invisible, too many meteors appear, and some debris
   textures vanish.

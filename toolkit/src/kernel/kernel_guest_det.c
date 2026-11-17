@@ -66,6 +66,7 @@ typedef struct {
 typedef struct {
     int present;                /* the device's thread exists */
     int grant, done, worked;
+    int pending;                /* passes left in this grant (device_rounds) */
     long rounds;
 } DetDevice;
 
@@ -857,16 +858,26 @@ void xbox_GuestDetDeviceWait(int id)
 void xbox_GuestDetDeviceDone(int id, int worked)
 {
     EnterCriticalSection(&s_lock);
-    s_dev[id].worked = worked;
-    s_dev[id].done = 1;
+    s_dev[id].worked |= worked;
     s_dev[id].rounds++;
+    if (s_dev[id].pending > 1 && s_dev[id].present) {
+        /* more passes in this grant: the device goes straight on, without
+         * a round trip through the ring for each (device_rounds) */
+        s_dev[id].pending--;
+        s_dev[id].grant = 1;
+    } else {
+        s_dev[id].pending = 0;
+        s_dev[id].done = 1;
+    }
     WakeAllConditionVariable(&s_cv);
     LeaveCriticalSection(&s_lock);
 }
 
-/* One pass of a device thread, waited for. 1 when it did work; -1 when the
- * device has no thread. */
-static int device_round(int id)
+/* n passes of a device thread in a row, waited for. Nothing else runs
+ * between them, so this is the same as n device_round calls, with one
+ * hand-off instead of n (the APU's 25 frames a vblank). 1 when one did
+ * work; -1 when the device has no thread. */
+static int device_rounds(int id, int n)
 {
     int worked;
     uint64_t t0 = s_prof ? xbox_HostNowNs() : 0;
@@ -877,6 +888,8 @@ static int device_round(int id)
         return -1;
     }
     s_dev[id].done = 0;
+    s_dev[id].worked = 0;
+    s_dev[id].pending = n;
     s_dev[id].grant = 1;
     WakeAllConditionVariable(&s_cv);
     while (!s_dev[id].done)
@@ -887,6 +900,12 @@ static int device_round(int id)
         s_pf_dev_ns[id] += xbox_HostNowNs() - t0;
     LeaveCriticalSection(&s_lock);
     return worked;
+}
+
+/* One pass of a device thread, waited for. */
+static int device_round(int id)
+{
+    return device_rounds(id, 1);
 }
 
 /* Every runnable thread is waiting: the GPU first, which may end a wait on
@@ -907,12 +926,7 @@ static void idle_step(void)
      * which is what a pad script or a record on the poll clock counts. */
     device_round(XBOX_DET_DEV_OHCI);
     /* The APU's frames for this vblank, after its interrupt and DPCs. */
-    {
-        int k;
-        for (k = 0; k < XBOX_DET_APU_FRAMES_PER_VBLANK; k++)
-            if (device_round(XBOX_DET_DEV_APU) < 0)
-                break;
-    }
+    device_rounds(XBOX_DET_DEV_APU, XBOX_DET_APU_FRAMES_PER_VBLANK);
     trace_ram('S', s_steps);
     if (s_prof)
         prof_step();

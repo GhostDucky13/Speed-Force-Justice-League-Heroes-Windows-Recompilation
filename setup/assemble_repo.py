@@ -39,7 +39,7 @@ def main():
     for f in ('main.c', 'recomp_manual.c', 'speedforce.rc', 'speedforce.ico'):
         shutil.copy2(os.path.join(XR, 'jlh-recomp', 'src', f), os.path.join(g, 'src', f))
     os.makedirs(os.path.join(g, 'seeds'))
-    for f in ('jlh_seeds.json', 'add_cave.py', 'recomp_with_cave.py'):
+    for f in ('jlh_seeds.json', 'add_cave.py', 'recomp_with_cave.py', 'spin_waits.json'):
         shutil.copy2(os.path.join(G, 'runner', 'jobs', f), os.path.join(g, 'seeds', f))
     up = os.path.join(R, 'jlh-upscale')
     os.makedirs(up)

@@ -1,0 +1,8 @@
+{
+  "auto": false,
+  "sites": [
+    {"va": "0x00182630", "sleep": "kick_event",
+     "note": "D3D KickOff: spins until the walker acknowledges the flush bit; lowered so the deterministic mode (online play) hands the turn on at once"}
+  ],
+  "exclude": []
+}

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.0
+- New **Online** page in the launcher (Windows and Linux): play the two-player game with a
+  friend on another PC. One hosts, the other joins with the address the host's window shows.
+  Delay-based netplay: both PCs run the whole game deterministically and swap only their
+  controllers; the version, the game files and the host's saves are matched when connecting,
+  the input delay is set from the ping, and Windows hosts open their router's port by UPnP.
+- The game is now generated with `--back-edge-yield` and the D3D KickOff spin-wait site, which
+  the deterministic mode needs. Rebuild (run the setup again) to get online play.
+- The deterministic mode hands the APU its 25 frames per vblank in one go (faster).
+
 ## 2.0.1
 - Fixed: the build stopped at the Compile step with "[WinError 2] The system cannot find the file
   specified" on PCs that don't have CMake installed separately. The builder now starts its own

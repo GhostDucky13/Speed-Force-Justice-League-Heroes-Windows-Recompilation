@@ -35,7 +35,7 @@ import tkinter.font as tkfont
 import urllib.request
 from tkinter import filedialog, messagebox
 
-VERSION = '2.0.1'
+VERSION = '2.1.0'
 REPO = 'GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -325,8 +325,9 @@ def prepare_wine(wine, prefix, say=lambda m: None):
     return env
 
 
-def launch_game(install, choice, say=lambda m: None):
-    """Start SpeedForce.exe; returns (Popen, how) or raises RuntimeError."""
+def launch_game(install, choice, say=lambda m: None, extra_env=None):
+    """Start SpeedForce.exe; returns (Popen, how) or raises RuntimeError. extra_env goes to the game
+    (RECOMP_NETPLAY for online play)."""
     exe = os.path.join(install, 'SpeedForce.exe')
     if not os.path.exists(exe):
         raise RuntimeError("Speed Force isn't built in this folder. Run the builder (Speed Force > About > Rebuild).")
@@ -340,6 +341,7 @@ def launch_game(install, choice, say=lambda m: None):
         os.makedirs(data, exist_ok=True)
         env = dict(os.environ, STEAM_COMPAT_DATA_PATH=data, STEAM_COMPAT_CLIENT_INSTALL_PATH=root,
                    PROTON_ENABLE_NVAPI='1', SteamGameId='speedforce', SteamAppId='0')
+        env.update(extra_env or {})
         py = shutil.which('python3') or sys.executable
         p = subprocess.Popen([py, script, 'run', exe], cwd=install, env=env, stdout=log, stderr=log,
                              start_new_session=True)
@@ -349,6 +351,7 @@ def launch_game(install, choice, say=lambda m: None):
     env['WINEDEBUG'] = '-all'
     env['DXVK_LOG_LEVEL'] = 'none'
     env['VKD3D_DEBUG'] = 'none'
+    env.update(extra_env or {})
     p = subprocess.Popen([wine, exe], cwd=install, env=env, stdout=log, stderr=log, start_new_session=True)
     return p, name
 
@@ -1134,6 +1137,11 @@ class Launcher:
         self.update = ('checking', '', '')
         self.importing = False
         self.sel = []
+        self.online_msg = ''
+        self.e_port = self.ui.entry()
+        self.e_port.insert(0, str(self.st.get('np_port', 47001)))
+        self.e_addr = self.ui.entry()
+        self.e_addr.insert(0, self.st.get('np_join', ''))
         self.load_settings()
         threading.Thread(target=self.check_updates, daemon=True).start()
         self.render()
@@ -1179,7 +1187,7 @@ class Launcher:
             self.update = ('offline', '', '')
 
     def poll(self):
-        sig = (self.update, self.status, self.importing, time.time() < self.toast_until)
+        sig = (self.update, self.status, self.importing, time.time() < self.toast_until, self.online_msg)
         if sig != getattr(self, '_sig', None):
             self._sig = sig
             self.render()
@@ -1192,7 +1200,7 @@ class Launcher:
         u.draw_image('icon', os.path.join(HERE, 'icon.png'), 22, 22, 36, 36)
         u.text(68, 40, 'Speed Force', 'h2', anchor='w')
         for i, (key, name) in enumerate((('play', 'Play'), ('settings', 'Settings'), ('saves', 'Saves'),
-                                         ('about', 'About'))):
+                                         ('online', 'Online'), ('about', 'About'))):
             y = 84 + i * 44
             tag = u._tag()
             on = self.nav == key
@@ -1382,11 +1390,72 @@ class Launcher:
         u.text(272, 530, 'Removes Speed Force from this PC. You can keep your saves and settings.', 'small', SUB)
         u.button(776, 508, 160, 36, 'Uninstall', self.uninstall, 3)
 
+    def page_online(self):
+        u = self.ui
+        u.text(248, 22, 'Online', 'h1')
+        u.text(250, 58, 'Play the two-player game with a friend on another PC. Both of you need this version of '
+                        'Speed Force, built from the same USA discs. The host\'s saves are used.', 'small', SUB,
+               width=700)
+        u.round_rect(248, 100, 346, 236, 12, CARD, BORDER)
+        u.text(272, 116, 'Host (player 1)', 'h2')
+        u.text(272, 146, 'Port', 'small', SUB)
+        u.place_entry(self.e_port, 272, 166, 140)
+        u.button(424, 166, 146, 40, 'Host game', lambda: self.play_online(True), 1)
+        u.text(272, 222, 'A window then shows the address your friend types.', 'small', DIM, width=300)
+        u.round_rect(610, 100, 346, 236, 12, CARD, BORDER)
+        u.text(634, 116, 'Join (player 2)', 'h2')
+        u.text(634, 146, "Host's address", 'small', SUB)
+        u.place_entry(self.e_addr, 634, 166, 298)
+        u.button(634, 218, 146, 40, 'Join game', lambda: self.play_online(False), 1)
+        u.text(634, 272, "Like 203.0.113.5:47001, as the host's window shows it.", 'small', DIM, width=300)
+        if self.online_msg:
+            u.text(250, 346, self.online_msg.lstrip('!'), 'small', BAD if self.online_msg.startswith('!') else SUB,
+                   width=700)
+        u.round_rect(248, 370, 708, 200, 12, CARD, BORDER)
+        u.text(272, 386, "If your friend can't connect", 'h2')
+        u.text(272, 416,
+               "- On the host's router, forward the TCP port (47001) to the host's PC.\n"
+               "- Or both install Tailscale or ZeroTier (free), join the same network, and join with the host's "
+               "Tailscale / ZeroTier address.\n"
+               "- On the same network at home, join with the host's local address (192.168...).\n"
+               "Input lag is set from the ping: about 0.1 s on a good connection. On Linux the router's port "
+               "isn't opened automatically: forward it by hand.", 'small', SUB, width=660)
+
+    def play_online(self, host):
+        port = self.e_port.get().strip()
+        addr = self.e_addr.get().strip()
+        if host:
+            if not port.isdigit() or not 1024 <= int(port) <= 65535:
+                self.online_msg = '!Choose a port between 1024 and 65535 (47001 is a good default).'
+                self.render()
+                return
+            spec = f'host:{int(port)}'
+        else:
+            if not addr:
+                self.online_msg = "!Type the host's address, like 203.0.113.5:47001."
+                self.render()
+                return
+            spec = f'join:{addr}' if ':' in addr else f'join:{addr}:47001'
+        self.st['np_port'] = int(port) if port.isdigit() else 47001
+        self.st['np_join'] = addr
+        save_state(self.st)
+        self.online_msg = 'Starting...'
+        self.render()
+
+        def run():
+            try:
+                launch_game(self.install, self.st.get('runner', 'auto'),
+                            lambda m: setattr(self, 'online_msg', m), {'RECOMP_NETPLAY': spec})
+                self.root.after(0, self.root.destroy)
+            except Exception as e:      # noqa: BLE001 - shown to the player
+                self.online_msg = '!' + str(e)
+        threading.Thread(target=run, daemon=True).start()
+
     def render(self):
         self.ui.clear()
         self.sidebar()
         {'play': self.page_play, 'settings': self.page_settings, 'saves': self.page_saves,
-         'about': self.page_about}[self.nav]()
+         'online': self.page_online, 'about': self.page_about}[self.nav]()
 
     def go(self, key):
         self.nav = key
@@ -1420,6 +1489,8 @@ class Launcher:
         apply_theme(self.st['theme'])
         self.ui.root.configure(bg=BG)
         self.ui.c.configure(bg=BG)
+        for e in (self.e_port, self.e_addr):
+            e.configure(bg=INPUT, fg=TEXT, insertbackground=TEXT, disabledbackground=INPUT, disabledforeground=DIM)
         self.render()
 
     def recheck(self):
