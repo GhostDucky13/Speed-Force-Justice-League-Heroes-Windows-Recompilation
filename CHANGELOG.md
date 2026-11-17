@@ -2,11 +2,11 @@
 
 ## 3.0.2 (pre-release)
 - Fixed: missing visual effects (reported on GitHub and Reddit), such as Superman's freeze
-  breath, where only the sound played. Particle effects drawn as point sprites (breath, sparks,
-  smoke, energy blasts) lost their texture coordinates after the first frame that set them up,
-  because a speed-up in the graphics command decoder remembered the point-sprite switch as "not
-  handled here" and skipped every later change to it. Each particle then drew as one see-through
-  texel. The switch is now always applied.
+  breath (only its sound played) and the shadow under him. Effects the game draws
+  as point sprites lost their texture coordinates: a speed-up in the graphics command decoder
+  remembered the point-sprite switch as "not handled here" after its first use and skipped every
+  later change to it, so each particle drew as one see-through texel. The switch is now always
+  applied, which brings back every effect drawn this way.
 - Setup: install.log now starts with the Speed Force version and the system it runs on, and an
   error is logged with its full details and, for a missing file, the file's name. (GitHub issue
   #1 came from the 2.0.0 setup, whose build tool bug was fixed in 2.0.1; this makes reports like
