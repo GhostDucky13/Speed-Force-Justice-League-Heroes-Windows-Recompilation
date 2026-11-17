@@ -60,6 +60,14 @@
  * CMakeLists) -- MSVC's C4013 was emitted and discarded. Same failure as the
  * missing stdlib.h in kernel_bridge.c, in a hotter path. */
 #include <math.h>
+/* The x87 transcendentals from code compiled into the game rather than the C
+ * library, so every PC computes the same bits (online play needs it; see
+ * recomp_detmath.h in the toolkit's include folder). */
+#if defined(__has_include)
+#if __has_include("recomp_detmath.h")
+#include "recomp_detmath.h"
+#endif
+#endif
 #if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
 #include <xmmintrin.h>
 #include <emmintrin.h>
@@ -839,20 +847,61 @@ static inline RecompXmm XMM_CMP_PRED(RecompXmm a, RecompXmm b, int p) {
 }
 /* Packed unary ops; the first argument is unused, as for the binary forms. */
 RECOMP_XMM_LANEWISE(XMM_SQRT,  sqrtf(b.f[i]))
-/* These instructions deliberately approximate and treat denormals as zero.
- * Exact division changes Newton refinement and zero-mask idioms. */
+/* rcpss / rsqrtss. On the Xbox these approximate (12 bits) and treat
+ * denormals as zero. The approximation is not the same on every x86 CPU:
+ * Intel and AMD return different bits, so the host instruction made two PCs
+ * compute different particles and vertices from the same input, which online
+ * play cannot have. They are computed here instead, the same way on every
+ * PC: correctly rounded in double, then to float, with the instruction's
+ * special cases (denormal or zero input -> infinity with its sign, infinity
+ * -> zero, a result too small for a normal float -> zero, NaN kept, negative
+ * input to rsqrt -> the default NaN). More accurate than the instruction,
+ * which a Newton step after it only improves. RECOMP_NATIVE_RCP keeps the
+ * host instruction. */
+static inline float recomp_rcp_special(float x, int *done) {
+    uint32_t u; float r;
+    memcpy(&u, &x, 4);
+    *done = 1;
+    if ((u & 0x7F800000u) == 0) {                         /* zero or denormal */
+        u = (u & 0x80000000u) | 0x7F800000u; memcpy(&r, &u, 4); return r;
+    }
+    if ((u & 0x7FFFFFFFu) == 0x7F800000u) {              /* infinity */
+        u &= 0x80000000u; memcpy(&r, &u, 4); return r;
+    }
+    if ((u & 0x7FFFFFFFu) > 0x7F800000u) {               /* NaN: quieted */
+        u |= 0x00400000u; memcpy(&r, &u, 4); return r;
+    }
+    *done = 0;
+    return 0.0f;
+}
 static inline float recomp_rcpss(float x) {
-#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+#if defined(RECOMP_NATIVE_RCP) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
     return _mm_cvtss_f32(_mm_rcp_ss(_mm_set_ss(x)));
 #else
-    return 1.0f / (fpclassify(x) == FP_SUBNORMAL ? copysignf(0.0f, x) : x);
+    int done; float r = recomp_rcp_special(x, &done);
+    uint32_t u;
+    if (done) return r;
+    r = (float)(1.0 / (double)x);
+    memcpy(&u, &r, 4);
+    if ((u & 0x7F800000u) == 0) { u &= 0x80000000u; memcpy(&r, &u, 4); }   /* denormal out -> 0 */
+    return r;
 #endif
 }
 static inline float recomp_rsqrtss(float x) {
-#if defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__)
+#if defined(RECOMP_NATIVE_RCP) && (defined(_M_IX86) || defined(_M_X64) || defined(__i386__) || defined(__x86_64__))
     return _mm_cvtss_f32(_mm_rsqrt_ss(_mm_set_ss(x)));
 #else
-    return 1.0f / sqrtf(fpclassify(x) == FP_SUBNORMAL ? copysignf(0.0f, x) : x);
+    int done; float r = recomp_rcp_special(x, &done);
+    uint32_t u;
+    if (done) {
+        memcpy(&u, &x, 4);
+        if ((u & 0x7FFFFFFFu) == 0x7F800000u && (u & 0x80000000u)) {      /* -inf: NaN */
+            u = 0xFFC00000u; memcpy(&r, &u, 4);
+        }
+        return r;
+    }
+    if (x < 0.0f) { u = 0xFFC00000u; memcpy(&r, &u, 4); return r; }        /* the default NaN */
+    return (float)(1.0 / sqrt((double)x));
 #endif
 }
 RECOMP_XMM_LANEWISE(XMM_RSQRT, recomp_rsqrtss(b.f[i]))

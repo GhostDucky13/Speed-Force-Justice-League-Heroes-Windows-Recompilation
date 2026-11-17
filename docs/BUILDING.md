@@ -11,12 +11,12 @@ upscaler bridge), internet access for the downloads.
     launcher\build_launcher.bat        # SpeedForceLauncher.exe, SpeedForceBuilder.exe, sfpack.exe
     python setup\make_payload.py       # the build kit, in payload\
     launcher\sfpack.exe payload.sfar payload=_build launcher\SpeedForceLauncher.exe=SpeedForceLauncher.exe
-    copy /b launcher\SpeedForceBuilder.exe + payload.sfar dist\SpeedForce-Setup-2.1.0.exe
+    copy /b launcher\SpeedForceBuilder.exe + payload.sfar dist\SpeedForce-Setup-3.0.1.exe
 
 The builder unpacks the build kit (LZMS, Windows' own Compression API) into `<install>\_build`,
 runs `_build\python\python.exe -u _build\setup\sf_install.py --xbox <iso> --psp <iso> --app <install dir>
 [--saves <folder>]` and follows its `@@<per mille>|<text>` progress lines, then adds the shortcuts
-and the entry in Windows' installed apps. Scripted: `SpeedForce-Setup-2.1.0.exe /xbox <iso> /psp <iso>
+and the entry in Windows' installed apps. Scripted: `SpeedForce-Setup-3.0.1.exe /xbox <iso> /psp <iso>
 [/dir <folder>] [/saves <folder>]` fills the fields in. `setup\sf_saves.py --in <folder> --out
 <install dir>\saves` imports Xbox saves on its own.
 
@@ -39,7 +39,7 @@ on Linux `sf_install.py` cross-compiles with `x86_64-w64-mingw32-clang` (`CMAKE_
 so the result is the same `SpeedForce.exe` as on Windows. The launcher then runs it with Proton
 (`proton run`, prefix in `~/.local/share/speedforce/proton`), a system Wine, or the bundled Wine
 (prefix in `~/.local/share/speedforce/wine`, DXVK/vkd3d DLLs copied into it). Scripted:
-`SpeedForce-2.1.0-x86_64.AppImage --setup --xbox <iso> --psp <iso> [--dir <folder>] [--saves <folder>]`;
+`SpeedForce-3.0.1-x86_64.AppImage --setup --xbox <iso> --psp <iso> [--dir <folder>] [--saves <folder>]`;
 `--play` starts the game directly.
 
 ## Without the setup (developers)

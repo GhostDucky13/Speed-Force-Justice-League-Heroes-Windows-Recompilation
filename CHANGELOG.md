@@ -1,14 +1,32 @@
 # Changelog
 
-## 2.1.0
+## 3.0.1 (pre-release)
+- Fixed: no voices in cutscenes and in-game dialogue. The game speaks its dialogue on the center
+  speaker, and only the front left and right speakers reached the output. All six speaker feeds
+  are now folded down to stereo, as the Xbox does with its audio set to stereo (center and
+  surround at -3 dB). Surround-only sounds are back too.
+- Online play, the first version for testing: not yet tried by many players, so it is a
+  pre-release. Please report how it goes.
 - New **Online** page in the launcher (Windows and Linux): play the two-player game with a
   friend on another PC. One hosts, the other joins with the address the host's window shows.
   Delay-based netplay: both PCs run the whole game deterministically and swap only their
   controllers; the version, the game files and the host's saves are matched when connecting,
-  the input delay is set from the ping, and Windows hosts open their router's port by UPnP.
+  the input delay is set from the ping, and the host asks its router to open the port (UPnP).
 - The game is now generated with `--back-edge-yield` and the D3D KickOff spin-wait site, which
   the deterministic mode needs. Rebuild (run the setup again) to get online play.
 - The deterministic mode hands the APU its 25 frames per vblank in one go (faster).
+- Windows and Linux play together: the game's sine, cosine, tangent, arctangent and logarithm
+  (the Xbox's x87 instructions) are now computed by code built into the game
+  (`toolkit/include/recomp_detmath.h`, from Go's math package) instead of each system's C
+  library, whose last bit differs between Windows and Wine / Proton. Every PC now computes the
+  same results.
+- Intel and AMD play together: the Xbox's approximate reciprocal and reciprocal square root
+  (SSE `rcpss` / `rsqrtss`) return different bits on Intel and AMD processors, which made the
+  same particles and vertices differ between two PCs. They are now computed exactly, the same way
+  on every processor.
+- New guide: [docs/ONLINE.md](docs/ONLINE.md), with every combination of Windows and Linux, port
+  forwarding, Tailscale / ZeroTier, firewalls and troubleshooting.
+- Version 3: online play is a big enough change for a new major version (3.0.0 was not released).
 
 ## 2.0.1
 - Fixed: the build stopped at the Compile step with "[WinError 2] The system cannot find the file

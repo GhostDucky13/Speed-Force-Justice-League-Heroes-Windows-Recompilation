@@ -35,7 +35,7 @@ import tkinter.font as tkfont
 import urllib.request
 from tkinter import filedialog, messagebox
 
-VERSION = '2.1.0'
+VERSION = '3.0.1'
 REPO = 'GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation'
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -1170,18 +1170,21 @@ class Launcher:
             pass
 
     def check_updates(self):
+        # The newest of the last few releases, pre-releases included: this line of Speed Force is
+        # itself a pre-release, so /releases/latest (stable only) would never offer the next one.
         try:
-            req = urllib.request.Request(f'https://api.github.com/repos/{REPO}/releases/latest',
+            req = urllib.request.Request(f'https://api.github.com/repos/{REPO}/releases?per_page=8',
                                          headers={'User-Agent': f'SpeedForce/{VERSION}',
                                                   'Accept': 'application/vnd.github+json'})
             with urllib.request.urlopen(req, timeout=8) as r:
-                rel = json.load(r)
-            tag = rel.get('tag_name', '')
+                rels = json.load(r)
 
             def num(v):
                 p = [int(x) for x in ''.join(c if c.isdigit() else ' ' for c in v).split()[:3]]
                 return tuple(p + [0] * (3 - len(p)))
-            url = rel.get('html_url') or f'https://github.com/{REPO}/releases/latest'
+            rel = max((x for x in rels if not x.get('draft')), key=lambda x: num(x.get('tag_name', '')))
+            tag = rel.get('tag_name', '')
+            url = rel.get('html_url') or f'https://github.com/{REPO}/releases'
             self.update = ('newer', tag, url) if num(tag) > num(VERSION) else ('latest', tag, url)
         except Exception:
             self.update = ('offline', '', '')
@@ -1418,8 +1421,8 @@ class Launcher:
                "- Or both install Tailscale or ZeroTier (free), join the same network, and join with the host's "
                "Tailscale / ZeroTier address.\n"
                "- On the same network at home, join with the host's local address (192.168...).\n"
-               "Input lag is set from the ping: about 0.1 s on a good connection. On Linux the router's port "
-               "isn't opened automatically: forward it by hand.", 'small', SUB, width=660)
+               "Input lag is set from the ping: about 0.1 s on a good connection. If the host's window doesn't "
+               "say the router opened the port, forward it by hand. Full guide: docs/ONLINE.md on GitHub.", 'small', SUB, width=660)
 
     def play_online(self, host):
         port = self.e_port.get().strip()

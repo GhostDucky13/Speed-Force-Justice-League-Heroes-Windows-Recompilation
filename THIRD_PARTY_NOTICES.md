@@ -7,6 +7,7 @@ the linked projects (and, for the toolkit's dependencies, in `toolkit/LICENSES` 
 |---|---|---|
 | [xboxrecomp](toolkit/README.md) (sp00nz) | Static recompilation toolkit and runtime (forked in `toolkit/`) | MIT |
 | [SDL3](https://github.com/libsdl-org/SDL) | Controllers (SDL3.dll ships with the game) | zlib |
+| [Go math package](https://github.com/golang/go/tree/master/src/math) (from Cephes and FreeBSD msun) | sin, cos, tan, atan2, log2, expm1 compiled into the game (`toolkit/include/recomp_detmath.h`) so every PC computes the same results online | BSD-3-Clause (Copyright 2009 The Go Authors) |
 | [dsp56300](https://github.com/xemu-project/dsp56300) | Audio DSP JIT, linked into the game | MIT |
 | [librashader](https://github.com/SnowflakePowered/librashader) | Optional presentation shaders (librashader.dll) | MPL-2.0 (or GPL-3.0) |
 | [NVIDIA DLSS](https://github.com/NVIDIA/DLSS) | nvngx_dlss.dll, NGX static library in jlh_upscale.dll | NVIDIA RTX SDKs license (runtime redistributable with applications) |

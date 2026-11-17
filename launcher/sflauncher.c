@@ -15,7 +15,7 @@
 #include <wctype.h>
 
 #ifndef SF_VERSION
-#define SF_VERSION "2.1.0"
+#define SF_VERSION "3.0.1"
 #endif
 #ifndef SF_GITHUB_REPO
 #define SF_GITHUB_REPO "GhostDucky13/Speed-Force-Justice-League-Heroes-Windows-Recompilation"
@@ -275,14 +275,17 @@ static int json_str(const char *j, const char *key, char *out, size_t n)
 
 static DWORD WINAPI update_thread(void *arg)
 {
-    static char body[65536];
+    static char body[262144];
     char tag[64], url[400];
     wchar_t path[256];
     HINTERNET s, c = NULL, r = NULL;
     DWORD got = 0, n, status = 0, sl = sizeof status;
     int newer = -1;                                   /* -1 unknown, 0 latest, 1 newer */
     (void)arg;
-    swprintf(path, 256, L"/repos/%hs/releases/latest", SF_GITHUB_REPO);
+    /* The newest of the last few releases, pre-releases included: this line
+     * of Speed Force is itself a pre-release, so /releases/latest (stable
+     * only) would never offer the next one. */
+    swprintf(path, 256, L"/repos/%hs/releases?per_page=8", SF_GITHUB_REPO);
     s = WinHttpOpen(L"SpeedForceLauncher/" SF_VERSION_W, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (s) {
@@ -300,11 +303,20 @@ static DWORD WINAPI update_thread(void *arg)
         while (got + 1 < sizeof body && WinHttpReadData(r, body + got, (DWORD)(sizeof body - 1 - got), &n) && n)
             got += n;
         body[got] = 0;
-        if (status == 200 && json_str(body, "tag_name", tag, sizeof tag)) {
+        tag[0] = 0;
+        if (status == 200) {
+            const char *p = body;
+            char t[64];
+            while ((p = strstr(p, "\"tag_name\"")) != NULL) {
+                if (json_str(p, "tag_name", t, sizeof t) && version_num(t) > version_num(tag))
+                    snprintf(tag, sizeof tag, "%s", t);
+                p += 10;
+            }
+        }
+        if (tag[0]) {
             newer = version_num(tag) > version_num(SF_VERSION);
             if (newer) {
-                if (!json_str(body, "html_url", url, sizeof url))
-                    snprintf(url, sizeof url, "https://github.com/%s/releases/latest", SF_GITHUB_REPO);
+                snprintf(url, sizeof url, "https://github.com/%s/releases/tag/%s", SF_GITHUB_REPO, tag);
                 MultiByteToWideChar(CP_UTF8, 0, url, -1, g_update_url, 512);
                 {
                     wchar_t *t = (wchar_t *)malloc(64 * sizeof(wchar_t));
@@ -711,7 +723,8 @@ static void paint_online(void)
             L"- Or both install Tailscale or ZeroTier (free), join the same network, and join with the host's "
             L"Tailscale / ZeroTier address.\n"
             L"- On the same network at home, join with the host's local address (192.168...).\n"
-            L"Input lag is set from the ping: about 0.1 s on a good connection. The game waits if one PC falls behind.",
+            L"Input lag is set from the ping: about 0.1 s on a good connection. The game waits if one PC falls behind.\n"
+            L"Step-by-step guide: docs/ONLINE.md on the GitHub page (About > GitHub page).",
             ui.f_small, C_SUB, DT_WORDBREAK);
 }
 

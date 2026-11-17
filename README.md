@@ -26,6 +26,12 @@ more. See [FEATURES.md](FEATURES.md) for a detailed explanation of everything.
   PC** (the launcher's Online page).
 - Bring your **Xbox saves** over; completed saves start Episode 1 the Chapter Select way.
 
+> **Two versions are available on [Releases](../../releases):**
+> - **2.1.x (stable, "Latest")**: everything below except online play.
+> - **3.0.1 (pre-release)**: adds **online play** ([guide](docs/ONLINE.md)). It works in our
+>   tests, but hasn't been tried by many players yet: please report how it goes. Both versions
+>   use the same saves and settings, so you can switch between them.
+
 > **No game code or data is included in this repository or in the setup.**
 > You need your own dumps of both discs. The setup rebuilds everything on your PC from them.
 
@@ -42,7 +48,8 @@ How to make the dumps from discs you own: [docs/DUMPING.md](docs/DUMPING.md).
 
 ## Installing
 
-1. Download `SpeedForce-Setup-2.1.0.exe` from [Releases](../../releases) and run it. It's one
+1. Download `SpeedForce-Setup-<version>.exe` from [Releases](../../releases) (the stable 2.1.x,
+   or the 3.0.1 pre-release for online play) and run it. It's one
    program, the **Speed Force Builder**: no administrator rights are needed.
 2. **Game files:** choose where to install (by default `%LOCALAPPDATA%\Programs\Speed Force`) and
    your Xbox and PSP disc images. Each one is checked on the spot, and so is the free space.
@@ -65,8 +72,9 @@ Your saves are in the `saves` folder inside the install folder, and your setting
 you can keep your saves and settings.
 
 The launcher checks this repository's [Releases](../../releases) when it opens and offers a
-newer version when there is one (it only asks GitHub for the latest release; nothing about you
-or your PC is sent).
+newer version when there is one (it only asks GitHub for the list of releases; nothing about
+you or your PC is sent). The 2.x versions offer stable releases only; the 3.0.1 pre-release
+also offers newer pre-releases.
 
 Supported dumps (SHA-1 of the whole image):
 
@@ -79,8 +87,9 @@ Other dumps are refused by default, because the mod tools patch exact byte offse
 
 ## Linux and Steam Deck
 
-Download `SpeedForce-2.1.0-x86_64.AppImage` from [Releases](../../releases), make it executable
-(right-click > Properties > Allow executing, or `chmod +x SpeedForce-2.1.0-x86_64.AppImage`) and
+Download `SpeedForce-<version>-x86_64.AppImage` from [Releases](../../releases) (the stable 2.1.x,
+or the 3.0.1 pre-release for online play), make it executable (right-click > Properties > Allow
+executing, or `chmod +x SpeedForce-<version>-x86_64.AppImage`) and
 open it. The same builder opens, with the same steps: choose the install folder (by default
 `~/Games/Speed Force`) and your two dumps, and it builds the game on your PC. It needs about 9 GB
 free while building and about 5 GB afterwards. When it's done, the AppImage is the launcher
@@ -110,18 +119,26 @@ Notes:
 
 ## Playing online
 
-Two players on two PCs, through the launcher's **Online** page: one player hosts, the other
-joins with the address the host's window shows. Both PCs run the whole game and swap only their
-controllers every frame, so the game plays exactly as two players on one couch.
+*In the 3.0.1 pre-release.*
+
+Two players on two computers, through the launcher's **Online** page: one player hosts, the
+other joins with the address the host's window shows. Both computers run the whole game and swap
+only their controllers every frame, so the game plays exactly as two players on one couch.
+**Windows and Linux / Steam Deck can play together** in any combination.
+
+**[Step-by-step guide: docs/ONLINE.md](docs/ONLINE.md)**: Windows and Windows, Linux and Linux,
+Linux and Windows, port forwarding, Tailscale / ZeroTier, firewalls and troubleshooting.
+
+In short:
 
 - Both players need **the same Speed Force version, built from the USA discs**, with no mods.
   The game checks this when you connect.
 - The **host's saves** are used for the session (the joiner's own saves are left alone). Pick
   Two Players in a new game or Chapter Select, or add player 2 from the pause menu.
-- **Connecting:** on Windows the host's PC asks the router to open the port (UPnP). If that
-  doesn't work, forward the TCP port (default 47001) on the host's router to the host's PC, or
-  both join the same free Tailscale or ZeroTier network and use that address. On the same home
-  network, join with the host's local address.
+- **Connecting:** on the same home network, join with the host's local address. Over the
+  internet, the host's PC asks the router to open the port (UPnP); if that doesn't work, forward
+  the TCP port (default 47001) on the host's router, or both join the same free Tailscale or
+  ZeroTier network and use that address.
 - **Input delay** is set from the ping when you connect: about 4 to 8 frames (0.07 to 0.13 s).
   If one PC falls behind, both wait for it.
 - **Your PC needs some headroom:** online play runs the game in a strict, step-by-step mode so
@@ -160,9 +177,10 @@ launcher are plain Win32 C with a small shared UI (`launcher/sfui.h`).
 
 ## Known issues
 
-- Online play: the deterministic mode it needs is slower than normal play (on the test PC
-  about 64 fps of headroom with one copy), so weaker PCs may run below 60 fps online. Not yet
-  tested between two different PCs over the internet.
+- Online play (3.0.1 pre-release): the deterministic mode it needs is slower than normal play,
+  so weaker PCs may run below 60 fps online. Tested with two copies on one Windows PC and on
+  Linux, and Windows against Linux with the same inputs; not yet between two players over the
+  internet. Reports are welcome.
 
 - Episode 5, Mars (e5l1): laser fire can be invisible, too many meteors appear, and some debris
   textures vanish.

@@ -1200,7 +1200,7 @@ static void jlh_installed_defaults(void)
  * So before the kernel starts: turn that mode on, connect, check that the
  * other side has the same Speed Force version and game files, and give the
  * joiner the host's saves and language. */
-#define JLH_NETPLAY_VERSION "Speed Force 2.1.0 netplay 1"
+#define JLH_NETPLAY_VERSION "Speed Force 3.0.1 netplay 1"
 
 static uint64_t fnv(uint64_t h, const void *p, size_t n)
 {
@@ -1478,6 +1478,7 @@ static void jlh_netplay_setup(void)
     snprintf(buf, sizeof buf, "%s\\mods", dir);
     me.files = fp_dir(me.files, buf, "");
     snprintf(me.lang, sizeof me.lang, "%s", getenv("RECOMP_SYSTEM_LANGUAGE") ? getenv("RECOMP_SYSTEM_LANGUAGE") : "");
+    fprintf(stderr, "[NETPLAY] %s, game files %016llx\n", me.version, (unsigned long long)me.files);
 
     if (netplay_connect(spec, err, sizeof err) != 0)
         jlh_netplay_fail(err);
@@ -1493,7 +1494,8 @@ static void jlh_netplay_setup(void)
     if (me.files != them.files)
         jlh_netplay_fail("Your game files differ from the other player's.\n\n"
                          "Both of you need Speed Force built from the USA Xbox and PSP discs, with no mods. "
-                         "Rebuild the game from the launcher (About > Rebuild) and try again.");
+                         "Build the game again (Windows: run the Speed Force setup; Linux: About > Rebuild in the launcher) "
+                         "and try again.");
     if (netplay_is_host()) {
         /* the host's saves and language for both, and the input delay for the ping */
         const char *saves = getenv("RECOMP_SAVE_DIR");
